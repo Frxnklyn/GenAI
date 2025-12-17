@@ -5,3 +5,4 @@
 - Widget `axenox.GenAI.AIChat`
 - [Testing](AI_Testing/index.md)
   - enthählt Informationen darüber wie man Metriken angibt und allgemein Test Cases ausfüllt und automatisch durchlaufen lässt
+  -weiteres unter: [How to?](AI_Testing/HowToTesting.md)
