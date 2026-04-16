@@ -684,7 +684,7 @@ class GenericAssistant implements AiAgentInterface
      * 
      * @uxon-property concepts
      * @uxon-type \axenox\GenAI\Common\AbstractConcept
-     * @uxon-template {"metamodel_bmdb": {"class": "\\exface\\Core\\AI\\Concepts\\MetamodelDbmlConcept"}}
+     * @uxon-template {"metamodel_bmdb": {"class": "\\axenox\\genai\\AI\\Concepts\\MetamodelDbmlConcept"}}
      * 
      * @param \exface\Core\CommonLogic\UxonObject $arrayOfConcepts
      * @return \axenox\GenAI\Interfaces\AiAgentInterface
