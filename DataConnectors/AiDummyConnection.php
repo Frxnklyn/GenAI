@@ -111,38 +111,49 @@ abstract class AiDummyConnection extends AbstractDataConnector
     {
         $configured = $this->dryrunToolCalls;
         $calls = [];
+        $agentTools = [];
+        foreach ($query->getTools() as $tool) {
+            $agentTools[$tool->getName()] = $tool;
+        }
 
+        // Wenn keine vorkonfigurierten Tool-Calls, dann alle Tools aus dem Agenten nehmen
         if (empty($configured)) {
-            foreach (array_values($query->getTools()) as $idx => $tool) {
+            $idx = 0;
+            foreach ($agentTools as $toolName => $tool) {
                 $calls[] = [
-                    'id' => 'call_dryrun_' . ($idx + 1),
-                    'name' => $tool->getName(),
+                    'id' => 'call_dryrun_' . (++$idx),
+                    'name' => $toolName,
                     'arguments' => new \stdClass(),
                 ];
             }
             return $calls;
         }
 
+        // Wenn assoziatives Array (tool_name => definition)
         if ($this->isAssocArray($configured)) {
             $index = 0;
             foreach ($configured as $toolName => $definition) {
+                // Nur Tools, die auch im Agenten definiert sind, berücksichtigen
+                if (!isset($agentTools[$toolName])) {
+                    continue;
+                }
                 $index++;
                 $calls[] = $this->normalizeDryrunToolCall((string) $toolName, $definition, $index);
             }
             return $calls;
         }
 
-        foreach (array_values($configured) as $idx => $definition) {
+        // Wenn Liste von Tool-Definitionsobjekten
+        $idx = 0;
+        foreach (array_values($configured) as $definition) {
             if (! is_array($definition)) {
                 continue;
             }
-
             $toolName = (string) ($definition['name'] ?? $definition['tool'] ?? $definition['tool_name'] ?? '');
-            if ($toolName === '') {
+            if ($toolName === '' || !isset($agentTools[$toolName])) {
                 continue;
             }
-
-            $calls[] = $this->normalizeDryrunToolCall($toolName, $definition, $idx + 1);
+            $calls[] = $this->normalizeDryrunToolCall($toolName, $definition, ++$idx);
         }
 
         return $calls;
