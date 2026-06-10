@@ -3,6 +3,8 @@ namespace axenox\GenAI\Common\DataQueries;
 
 use axenox\GenAI\Interfaces\AiToolInterface;
 use axenox\GenAI\Interfaces\HttpResponseAdapterInterface;
+use axenox\GenAI\Interfaces\AiToolResultInterface;
+use axenox\GenAI\Interfaces\BinaryAiTooolResultInterface;
 use exface\Core\CommonLogic\DataQueries\AbstractDataQuery;
 use exface\Core\CommonLogic\Debugger\HttpMessageDebugger;
 use exface\Core\DataTypes\ComparatorDataType;
@@ -90,17 +92,33 @@ class OpenAiApiDataQuery extends AbstractDataQuery implements AiQueryInterface
         return $this;
     }
 
-    public function appendToolMessages(bool $existingCall, string $toolResponse, string $callId, array $requestMessage) : OpenAiApiDataQuery
+    public function appendToolMessages(bool $existingCall, string|AiToolResultInterface $toolResponse, string $callId, array $requestMessage) : OpenAiApiDataQuery
     {
         if (!$existingCall){
             $this->messages[] = $requestMessage;
         }
+
+        $toolResponseText = $toolResponse instanceof AiToolResultInterface
+            ? $toolResponse->getValue()
+            : $toolResponse;
         
         $this->messages[] = [
             'tool_call_id' => $callId,
-            'content' => $toolResponse, 
+            'content' => $toolResponseText,
             'role' => AiMessageTypeDataType::TOOL
         ];
+
+        if ($toolResponse instanceof BinaryAiTooolResultInterface) {
+            $contentBlocks = $toolResponse->getValueAsContentBlocks();
+            if (! empty($contentBlocks)) {
+                // OpenAI does not accept these multimodal blocks as a TOOL response, so we send them
+                // as a USER message as a compatibility workaround.
+                $this->messages[] = [
+                    'content' => $contentBlocks,
+                    'role' => AiMessageTypeDataType::USER,
+                ];
+            }
+        }
 
         return $this;
     }
