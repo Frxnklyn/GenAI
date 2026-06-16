@@ -90,15 +90,16 @@ JS);
     {
         $top = $this->getButtonsHTML('top');
         $botton = $this->getButtonsHTML('botton');
+        $requestDataJs = 'var widgetData = null;';
 
         if ($this->isBoundToAttribute()) {
             $requestDataJs = <<<JS
-                requestDetails.body.data = {
-                    oId: "{$this->getMetaObject()->getId()}", 
-                    rows: [
-                        { {$this->getAttributeAlias()}: $("#{$this->getIdOfDeepChat()}").data("exf-value") }
-                    ]
-                }
+                    var widgetData = {
+                        oId: "{$this->getMetaObject()->getId()}", 
+                        rows: [
+                            { "{$this->getAttributeAlias()}": $("#{$this->getIdOfDeepChat()}").data("exf-value") }
+                        ]
+                    };
     JS;
 
 
@@ -145,8 +146,37 @@ JS);
                 }'
                 requestInterceptor = 'function (requestDetails) {
                     var domEl = document.getElementById("{$this->getIdOfDeepChat()}");
-                    requestDetails.body.conversation = domEl.conversationId;
-                    {$requestDataJs};
+                    var conversationId = domEl && domEl.conversationId ? domEl.conversationId : null;
+                    {$requestDataJs}
+
+                    if (requestDetails.body instanceof FormData) {
+                        if (conversationId !== null) {
+                            requestDetails.body.set("conversation", conversationId);
+                        }
+                        requestDetails.body.set("object", "{$this->getMetaObject()->getAliasWithNamespace()}");
+                        requestDetails.body.set("page", "{$this->getPage()->getAliasWithNamespace()}");
+                        requestDetails.body.set("widget", "{$this->getId()}");
+
+                        if (widgetData !== null) {
+                            requestDetails.body.set("data", JSON.stringify(widgetData));
+                        }
+
+                        if (window.console && console.debug) {
+                            console.debug("DeepChat FormData", Array.from(requestDetails.body.entries()));
+                        }
+
+                        return requestDetails;
+                    }
+
+                    requestDetails.body = requestDetails.body || {};
+                    if (conversationId !== null) {
+                        requestDetails.body.conversation = conversationId;
+                    }
+
+                    if (widgetData !== null) {
+                        requestDetails.body.data = widgetData;
+                    }
+
                     return requestDetails;
                 }'
 
