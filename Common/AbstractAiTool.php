@@ -1,8 +1,10 @@
 <?php
 namespace axenox\GenAI\Common;
 
+use axenox\GenAI\Common\Selectors\AiToolSelector;
+use axenox\GenAI\Factories\AiFactory;
 use axenox\GenAI\Interfaces\AiToolInterface;
-use axenox\GenAI\Uxon\AiConceptUxonSchema;
+use axenox\GenAI\Uxon\AiToolUxonSchema;
 use exface\Core\CommonLogic\Actions\ServiceParameter;
 use exface\Core\CommonLogic\Traits\ImportUxonObjectTrait;
 use exface\Core\CommonLogic\UxonObject;
@@ -15,11 +17,12 @@ abstract class AbstractAiTool implements AiToolInterface
 {
     use ImportUxonObjectTrait;
 
-    protected $workbench = null;
+    private $workbench = null;
+    private ?string $alias = null;
 
     private $uxon = null;
 
-    private $arguments = [];
+    private $arguments = null;
 
     private $name = null;
 
@@ -51,15 +54,33 @@ abstract class AbstractAiTool implements AiToolInterface
      */
     protected function setArguments(UxonObject $arrayOfServiceParams) : AiToolInterface
     {
+        $argTemplates = static::getArgumentsTemplates($this->getWorkbench());
         foreach ($arrayOfServiceParams as $i => $uxon) {
-            array_push($this->arguments, new ServiceParameter($this, $uxon));
+            $argParam = $argTemplates[$i];
+            $argParam->importUxonObject($uxon);
+            $this->arguments[] = $argParam;
         }
         return $this;
     }
 
     public function getArguments(): array
     {
-        return $this->arguments;
+        if ($this->arguments === null) {
+            $defaultArgs = static::getArgumentsTemplates($this->getWorkbench());
+            if (! empty($defaultArgs)) {
+                $this->arguments = $defaultArgs;
+            }
+        }
+        return $this->arguments ?? [];
+    }
+
+    /**
+     * {@inheritDoc}
+     * @see AiToolInterface::getAppendix()
+     */
+    public function getAppendix() : array
+    {
+        return [];
     }
 
     /**
@@ -236,7 +257,7 @@ abstract class AbstractAiTool implements AiToolInterface
     {
         $uxon = new UxonObject();
         $uxon->setProperty('description', '');
-        foreach (self::getArgumentsTemplates($workbench) as $param) {
+        foreach (static::getArgumentsTemplates($workbench) as $param) {
             $uxon->appendToProperty('arguments', $param->exportUxonObject());
         }
         return $uxon;
@@ -249,22 +270,40 @@ abstract class AbstractAiTool implements AiToolInterface
      */
     public static function getUxonSchemaClass() : ?string
     {
-        return AiConceptUxonSchema::class;
+        return AiToolUxonSchema::class;
     }
 
     /**
-     * PHP class of the tool
-     * 
-     * @uxon-property class
-     * @uxon-type string
-     * @uxon-template \axenox\GenAI\AI\Tools\GetDocsTool
-     * 
-     * @param string $class
+     * Alias of the tool prototype with namespace
+     *
+     * @uxon-property alias
+     * @uxon-type metamodel:axenox.GenAI.AI_TOOL_PROTOTYPE:ALIAS_WITH_NS
+     * @uxon-required true
+     *
+     * @param string $aliasWithNamespace
      * @return AiToolInterface
      */
-    protected function setClass(string $class) : AiToolInterface
+    protected function setAlias(string $aliasWithNamespace) : AiToolInterface
     {
-        // Do nothing - this is just to make importUxon() work
+        $this->alias = $aliasWithNamespace;
         return $this;
+    }
+
+    public function getAliasWithNamespace() : string
+    {
+        return $this->alias ?? AiFactory::findToolAlias(new AiToolSelector($this->getWorkbench(), get_class($this)));
+    }
+    
+    public static function getTemplate(WorkbenchInterface $workbench) : array
+    {
+        $argsModels = [];
+        foreach (static::getArgumentsTemplates($workbench) as $param) {
+            $argsModels[] = $param->exportUxonObject()->toArray();
+        }
+        return [
+            'alias' => AiFactory::findToolAlias(new AiToolSelector($workbench, static::class)),
+            'description' => '',
+            'arguments' => $argsModels,
+        ];
     }
 }

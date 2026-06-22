@@ -2,7 +2,11 @@
 namespace axenox\GenAI\Facades;
 
 use axenox\GenAI\Common\AiPrompt;
+use axenox\GenAI\Exceptions\AiPromptError;
+use axenox\GenAI\Interfaces\AiPromptInterface;
+use exface\Core\CommonLogic\Filesystem\InMemoryFile;
 use exface\Core\Exceptions\Facades\FacadeRoutingError;
+use exface\Core\Exceptions\UnexpectedValueException;
 use exface\Core\Facades\AbstractHttpFacade\Middleware\AuthenticationMiddleware;
 use exface\Core\Facades\AbstractHttpFacade\Middleware\DataUrlParamReader;
 use exface\Core\Facades\AbstractHttpFacade\Middleware\JsonBodyParser;
@@ -47,19 +51,29 @@ class AiChatFacade extends AbstractHttpFacade
         $uri = $request->getUri();
         $path = $uri->getPath();
         $headers = $this->buildHeadersCommon();
-        
+        $files = $request->getUploadedFiles();
+        $inMemoryFiles =[];
+        foreach ($files as $key => $file) {
+            $inMemoryFiles[] = new InMemoryFile($file->getStream()->getContents(), $file->getClientFilename(), $file->getClientMediaType());
+        }
         // api/aichat/exface.Core.SqlFilterAgent/completions -> exface.Core.SqlFilterAgent/completions
         $pathInFacade = StringDataType::substringAfter($path, $this->getUrlRouteDefault() . '/');
         // exface.Core.SqlFilterAgent/completions -> exface.Core.SqlFilterAgent, completions
         list($agentSelector, $pathInFacade) = explode('/', $pathInFacade, 2);
         $pathInFacade = mb_strtolower($pathInFacade);
-        try{                
+        
+        
+        try{
+            $prompt = $request->getAttribute(self::REQUEST_ATTR_TASK);
+            if(!$prompt instanceof AiPromptInterface){
+                throw new UnexpectedValueException("Request not delivered a AI Prompt");
+            }
+            $prompt->setFiles($inMemoryFiles);
+            $agent = $this->findAgent($agentSelector);
+            $response = $agent->handle($prompt);
         // Do the routing here
             switch (true) {     
                 case $pathInFacade === 'completions':
-                    $prompt = $request->getAttribute(self::REQUEST_ATTR_TASK);
-                    $agent = $this->findAgent($agentSelector);
-                    $response = $agent->handle($prompt);
 
                     $responseCode = 200;
                     $headers['content-type'] = 'application/json';
@@ -67,16 +81,13 @@ class AiChatFacade extends AbstractHttpFacade
                     break;
                 // Deepchat format - see https://deepchat.dev/docs/connect#Response
                 case $pathInFacade === 'deepchat':
-                    
-                    $prompt = $request->getAttribute(self::REQUEST_ATTR_TASK);
-                    $agent = $this->findAgent($agentSelector);
-                    $response = $agent->handle($prompt);
 
                     $responseCode = 200;
                     $headers['content-type'] = 'application/json';
                     $body = json_encode([
                             'text' => $response->getMessage(),
-                            'conversation'=> $response->getConversationId()
+                            'conversation'=> $response->getConversationId(),
+                            'additionalMessages' => $response->getStatusMessages()
                         ]
                         , JSON_UNESCAPED_UNICODE
                     );
@@ -100,15 +111,60 @@ class AiChatFacade extends AbstractHttpFacade
     {
         $response = parent::createResponseFromError($exception, $request);
         if ($response->getStatusCode() !== 401 && $request !== null && stripos($request->getUri()->getPath(), '/deepchat') !== false) {
+            switch (true) {
+                // Get the prompt from the exception
+                case $exception instanceof AiPromptError:
+                    $prompt = $exception->getPrompt();
+                    break;
+                // Get the prompt from the request (if already processed by the TaskReader middleware
+                case $request !== null && null !== $prompt = $request->getAttribute(self::REQUEST_ATTR_TASK, null):
+                    break;
+                default:
+                    $prompt = null;
+            }
+            // TODO What if we did not save the conversation? Make GenericAssistant::createConversation() public?
+            // Create a class AiConversation, that will take care of saving conversations. Extract saveXXX() methods
+            // from GenericAssistant and move them to this new class. We could create/laod conversation independently
+            // from the assistant classes.
+            
+            
             // @see https://deepchat.dev/docs/connect#Response
+            $conversationID = null;
+            
+
+            switch (true) {
+                // Get the prompt from the exception
+                case $exception instanceof AiPromptError:
+                    $prompt = $exception->getPrompt();
+                    $conversationID = $prompt->getConversationUid();
+                    break;
+                // Get the prompt from the request (if already processed by the TaskReader middleware
+                case $request !== null && null !== $prompt = $request->getAttribute(self::REQUEST_ATTR_TASK, null):
+                    break;
+                default:
+                    $prompt = null;
+            }
+            
+            if($conversationID === null) {
+                
+            }
+            // TODO What if we did not save the conversation? Make GenericAssistant::createConversation() public?
+            // Create a class AiConversation, that will take care of saving conversations. Extract saveXXX() methods
+            // from GenericAssistant and move them to this new class. We could create/laod conversation independently
+            // from the assistant classes.
+            
+           
             $json = [
-                'error' => $exception->getMessage()
+                'error' => $exception->getMessage(),
+                'conversation' => $conversationID
             ];
             $body = json_encode($json, JSON_UNESCAPED_UNICODE);
             return $response->withBody(Utils::streamFor($body))->withHeader('content-type','application/json');
         }
         return parent::createResponseFromError($exception, $request);
     }
+
+
 
     /**
      * 

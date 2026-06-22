@@ -45,15 +45,15 @@
     ],
     "rows": [
         {
-            "_EXPORT_SUMMARY": "SQL admin assistant",
-            "CREATED_ON": "2024-09-17 13:29:49",
-            "MODIFIED_ON": "2025-09-25 00:54:45",
+            "_EXPORT_SUMMARY": "Formula developer",
+            "CREATED_ON": "2026-06-03 11:54:14",
+            "MODIFIED_ON": "2026-06-03 11:54:14",
             "CREATED_BY_USER": "0x31000000000000000000000000000000",
             "MODIFIED_BY_USER": "0x31000000000000000000000000000000",
-            "UID": "0x11ef997726a6346a9977025041000001",
-            "NAME": "SQL admin assistant",
-            "DESCRIPTION": "Helps writing SQL statements in the built-in SQL admin",
-            "ALIAS": "sql_admin_assistant",
+            "UID": "0x11f188642d7b466e8864025041000001",
+            "NAME": "Formula developer",
+            "DESCRIPTION": "",
+            "ALIAS": "formula_developer",
             "APP": "0x11efbd2d8f0ae0babd2dc84bd653ed63"
         }
     ],

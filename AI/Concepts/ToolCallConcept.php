@@ -1,5 +1,4 @@
 <?php
-
 namespace axenox\GenAI\AI\Concepts;
 
 use axenox\GenAI\Common\AbstractConcept;
@@ -7,7 +6,18 @@ use axenox\GenAI\Exceptions\AiConceptConfigurationError;
 use axenox\GenAI\Factories\AiFactory;
 use axenox\GenAI\Interfaces\AiToolInterface;
 use exface\Core\CommonLogic\UxonObject;
+use exface\Core\DataTypes\MarkdownDataType;
 
+/**
+ * Allows to use placeholders for predefined tool calls in system prompts.
+ * 
+ * The concept can be used in two ways:
+ * 
+ * 1. Simply calling one of the tools of this agent: Just set the tool name as string value of the concept. The tool 
+ * must be defined in the agent's tool collection with the same name as the concept's placeholder.
+ * 2. Define an arbitrary tool inside the concept (the tool than cannot be called by the AI, just by this concept).
+ * 
+ */
 class ToolCallConcept extends AbstractConcept
 {
     private ?string $toolName = null;
@@ -15,22 +25,42 @@ class ToolCallConcept extends AbstractConcept
     
     private array $arguments = [];
 
-    public function resolve(array $placeholders) : array
+    
+    protected function getOutput(): string
     {
-        $phVals = [];
-        $phVals[$this->getPlaceholder()] =  $this->getTool()->invoke($this->getArguments());
-        return $phVals;
+        try{
+            $result = $this->getTool()->invoke($this->getAgent(), $this->getPrompt(), $this->arguments);
+            try {
+                foreach ($result->getExceptions() as $exception) {
+                    $this->getPrompt()->addWarning($exception);
+                }
+            } catch (\Throwable $e) {
+                // Ignore if prompt implementation does not support warnings.
+            }
+            return MarkdownDataType::convertFrontMatterToMarkdown($result->getValueAsMarkdown());
+        }catch (\Exception $e){
+            $this->getWorkbench()->getLogger()->logException($e);
+            return "";
+        }
+        
     }
 
     protected function getTool() : AiToolInterface
     {
-        if ($this->toolDef !== null) {
-            $tool = AiFactory::createToolFromUxon($this->getWorkbench(), $this->getToolName(), $this->toolDef);
-        } else {
-            throw new AiConceptConfigurationError($this, 'Missing tool definition for ToolCallConcept "' . $this->getPlaceholder() . '"');
+        switch (true) {
+            case $this->toolDef !== null:
+                $tool = AiFactory::createToolFromUxon($this->getWorkbench(), $this->toolDef, $this->getToolName());
+                break;
+            case $this->toolName !== null:
+                $tool = $this->getAgent()->getTool($this->getToolName());
+                break;
+            default: 
+                throw new AiConceptConfigurationError($this, 'Missing tool definition for ToolCallConcept "' . $this->getPlaceholder() . '"');
         }
+        
         return $tool;
     }
+
 
     /**
      * @param string|UxonObject $stringOrUxon
@@ -49,6 +79,21 @@ class ToolCallConcept extends AbstractConcept
     protected function getToolName() : string
     {
         return $this->toolName ?? $this->getPlaceholder();
+    }
+
+    /**
+     * Call a tool available to this agent by name instead of adding a new tool_definition here
+     * 
+     * @uxon-property tool_name
+     * @uxon-type string
+     * 
+     * @param string $toolName
+     * @return $this
+     */
+    protected function setToolName(string $toolName) : ToolCallConcept
+    {
+        $this->toolName = $toolName;
+        return $this;
     }
 
     /**
@@ -88,7 +133,7 @@ class ToolCallConcept extends AbstractConcept
      * ```
      * @uxon-property tool_definition
      * @uxon-type \axenox\GenAI\Common\AbstractAiTool
-     * @uxon-template {"class": ""}
+     * @uxon-template {"alias": ""}
      *
      * @param \exface\Core\CommonLogic\UxonObject $objectWithToolDefs
      * @return ToolCallConcept
@@ -121,4 +166,5 @@ class ToolCallConcept extends AbstractConcept
         $this->setTool($toolName);
         return $this;
     }
+
 }

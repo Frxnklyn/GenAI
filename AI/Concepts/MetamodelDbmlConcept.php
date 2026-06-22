@@ -2,7 +2,7 @@
 namespace axenox\GenAI\AI\Concepts;
 
 use axenox\GenAI\Common\AbstractConcept;
-use axenox\GenAI\Exceptions\AiConceptIncompleteError;
+use axenox\GenAI\Exceptions\AiConceptConfigurationError;
 use exface\Core\CommonLogic\UxonObject;
 use exface\Core\DataTypes\ArrayDataType;
 use exface\Core\DataTypes\BinaryDataType;
@@ -75,7 +75,7 @@ class MetamodelDbmlConcept extends AbstractConcept
         if (null !== $filtersUxon = $this->getObjectFiltersUxon()) {
             $ds->setFilters(ConditionGroupFactory::createFromUxon($this->getWorkbench(), $filtersUxon, $ds->getMetaObject()));
             if ($ds->getFilters()->isEmpty(true)) {
-                throw new AiConceptIncompleteError('Cannot use a DBML concept without `filters` or with empty filter values!');
+                throw new AiConceptConfigurationError($this, 'Cannot use a DBML concept without `filters` or with empty filter values!');
             }
         }
         $ds->dataRead();
@@ -378,16 +378,9 @@ class MetamodelDbmlConcept extends AbstractConcept
         return $uxon;
     }
 
-    /**
-     * 
-     * {@inheritDoc}
-     * @see \exface\Core\Interfaces\TemplateRenderers\PlaceholderResolverInterface::resolve()
-     */ 
-    public function resolve(array $placeholders) : array
+    protected function getOutput(): string
     {
-        $phVals = [];
-        $phVals[$this->getPlaceholder()] = $this->buildDBML();
-        return $phVals;
+        return $this->buildDBML();
     }
 
     protected function includesObject(MetaObjectInterface $obj) : bool

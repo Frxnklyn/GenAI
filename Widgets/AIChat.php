@@ -38,6 +38,10 @@ class AIChat extends InputCustom implements iFillEntireContainer
 
     private ?UxonObject $messageStyles = null;
 
+    private bool $uploadEnabled = false;
+
+    private array $allowedFileExtensions = [];
+
 
     protected function init()
     {
@@ -46,16 +50,23 @@ class AIChat extends InputCustom implements iFillEntireContainer
         $this->setIncludeJsModules(['vendor/npm-asset/deep-chat/dist/deepChat.bundle.js']);
         $this->setCssClass('exf-aichat');
         
+        // TODO why was this necessary although we used chatStyles below (they did not work in UI5)
+        $this->setCss(<<<CSS
+deep-chat {border: none !important;}
+CSS
+
+        );
+        
         $this->setScriptToResize(<<<JS
         
             setTimeout(function(jqSelf){
                 var jqParent = jqSelf.parent();
                 var iHeightP = jqParent.innerHeight();
                 var iWidthP = jqParent.innerWidth();
-                if (iHeightP > 0) {
+                if (iHeightP > 0 && iHeightP > (jqSelf.height() + 4)) {
                     jqSelf.height(iHeightP);
                 }
-                if (iWidthP > 0) {
+                if (iWidthP > 0 && iWidthP > (jqSelf.width() + 4)) {
                     jqSelf.width(iWidthP);
                 }
             }, 100, $('#{$this->getIdOfDeepChat()}'));
@@ -102,6 +113,7 @@ JS);
                 {$top}
             </div>
             <deep-chat 
+                mixedFiles='{$this->getMixedFilesAttributeValue()}'
                 id='{$this->getIdOfDeepChat()}'
                 class='exf-aichat'
                 connect='{
@@ -120,8 +132,16 @@ JS);
                         message.error = message.errorMessage;
                     }else{
                         domEl.conversationId = message.conversation;
-                    }    
-                    return message; 
+                    }
+                    
+                    
+                    const messages = [message];
+
+                    if (Array.isArray(message.additionalMessages)) {
+                        messages.push(...message.additionalMessages);
+                    }
+                
+                    return messages;   
                 }'
                 requestInterceptor = 'function (requestDetails) {
                     var domEl = document.getElementById("{$this->getIdOfDeepChat()}");
@@ -168,7 +188,7 @@ JS);
         </div>
     HTML;
     }
-    
+
     protected function buildJsDeepChatInit() : string
     {
         $suggestions = '';
@@ -176,92 +196,228 @@ JS);
             $suggestions .= ($suggestions ? ', ' : '') . "{ html: `<button class=\"deep-chat-button deep-chat-suggestion-button\" style=\"border-style: dashed\">{$s}</button>`, role: 'ai' }";
         }
         $introMessage = $this->getIntroMessage();
-        
+
         return <<<JS
 
-            (function () { 
-                const chat = document.getElementById('{$this->getIdOfDeepChat()}');                
-                if (!chat) {
-                  console.error("AIChat element not found in DOM");
-                  return;
-                }
-                
-                chat.historyInitDone = false;
-                chat.addEventListener('render', () => {
-                    if (chat.historyInitDone) return;
-                    chat.historyInitDone = true;
-            
-                    chat.history = [
-                        {$suggestions}
-                    ];
-                });
-            
-                function resetDeepChat(chatId) {
-                    const domEl = document.getElementById(chatId);
-                    if (domEl) {
-                        domEl.conversationId = null;
-                        domEl.messages = [];
-                        domEl.history = [
-                            {$suggestions}
-                        ];
-                        domEl.setAttribute('introMessage', '$introMessage');
-                    }
-                }
-            
-                const input = document.getElementById("ratingInput");
-                const stars = document.querySelectorAll("#stars span");
-            
-                function setRating(rating) {
-                    input.value = rating;
-                    stars.forEach((star, i) => {
-                        star.textContent = i < rating ? "★" : "☆";
-                        star.style.color = i < rating ? "gold" : "#bbb";
-                    });
-                    console.log('Send Rating');
-                }
-            
-                stars.forEach((star, i) => {
-                    star.addEventListener("click", () => setRating(i + 1));
-                });
-            
-            })();        
-
-
-            /*
-
-            Idea for how to send the Feedback
-            
-            
-            function sendRating(chatId) {
-                const el = document.getElementById(chatId);
-                const rating = Number(document.getElementById("ratingInput").value || 0);
-
-                const connect = {
-                    url: "{$this->getAiChatFacade()->buildUrlToFacade()}/{$this->getAgentAlias()}/rateChat",
-                    method: "POST",
-                    additionalBodyProps: {
-                        object: "{$this->getMetaObject()->getAliasWithNamespace()}",
-                        page: "{$this->getPage()->getAliasWithNamespace()}",
-                        widget: chatId,
-                        conversation: el?.conversationId ?? null,
-                        rating
-                    }
-                };
-
-                fetch(connect.url, {
-                    method: connect.method,
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(connect.additionalBodyProps)
-                })
-                .then(r => r.json())
-                .then(data => {
-                    console.log("Antwort von rateChat:", data);
-                })
-                .catch(err => console.error("Fehler:", err));
+        (function () { 
+            window.resetDeepChat = resetDeepChat;
+            const chat = document.getElementById('{$this->getIdOfDeepChat()}');                
+            if (!chat) {
+              console.error("AIChat element not found in DOM");
+              return;
             }
             
+            chat.historyInitDone = false;
+            chat.addEventListener('render', () => {
+                if (chat.historyInitDone) return;
+                chat.historyInitDone = true;
+        
+                chat.history = [
+                    {$suggestions}
+                ];
+
+                initPreCopyObserver(chat);
+            });
             
-            */
+            function resetDeepChat(chatId) {
+                const domEl = document.getElementById(chatId);
+                if (domEl) {
+                    domEl.conversationId = null;
+                    domEl.messages = [];
+                    domEl.history = [
+                        {$suggestions}
+                    ];
+                    domEl.setAttribute('introMessage', '$introMessage');
+                }
+            }
+        
+            const input = document.getElementById("ratingInput");
+            const stars = document.querySelectorAll("#stars span");
+        
+            function setRating(rating) {
+                input.value = rating;
+                stars.forEach((star, i) => {
+                    star.textContent = i < rating ? "★" : "☆";
+                    star.style.color = i < rating ? "gold" : "#bbb";
+                });
+                console.log('Send Rating');
+            }
+        
+            stars.forEach((star, i) => {
+                star.addEventListener("click", () => setRating(i + 1));
+            });
+            
+            function addCopyButtonsToPre(root) {
+                if (!root || !root.querySelectorAll) {
+                    return;
+                }
+            
+                root.querySelectorAll('pre').forEach((pre) => {
+                    if (pre.dataset.copyButtonInitialized === 'true') {
+                        return;
+                    }
+                    pre.dataset.copyButtonInitialized = 'true';
+            
+                    const parent = pre.parentNode;
+                    if (!parent) {
+                        return;
+                    }
+                    
+                    pre.style.marginTop = '2px';
+            
+                    const wrapper = document.createElement('div');
+                    wrapper.style.display = 'flex';
+                    wrapper.style.flexDirection = 'column';
+                    wrapper.style.alignItems = 'stretch';
+                    wrapper.style.gap = '6px';
+                    wrapper.style.margin = '8px 0';
+            
+                    const toolbar = document.createElement('div');
+                    toolbar.style.display = 'flex';
+                    toolbar.style.justifyContent = 'flex-end';
+                    toolbar.style.alignItems = 'center';
+            
+                    const button = document.createElement('button');
+                    button.type = 'button';
+                    button.textContent = 'Copy';
+                    button.setAttribute('aria-label', 'Code kopieren');
+                    button.style.display = 'inline-flex';
+                    button.style.alignItems = 'center';
+                    button.style.justifyContent = 'center';
+                    button.style.height = '28px';
+                    button.style.padding = '0 12px';
+                    button.style.fontSize = '12px';
+                    button.style.fontWeight = '500';
+                    button.style.lineHeight = '1';
+                    //button.style.boxShadow = '2px 2px 4px rgba(0,0,0,0.35)';
+                    button.style.borderRadius = '8px';
+                    button.style.cursor = 'pointer';
+                    button.style.background = '#111';
+                    button.style.color = '#fff';
+                    //button.style.boxShadow = '0 2px 8px rgba(0,0,0,0.35)';
+                    button.style.border = 'none';
+                    button.style.outline = 'none';
+                    button.style.backgroundClip = 'padding-box';
+                    wrapper.style.gap = '0px';
+                    toolbar.style.marginBottom = '2px';
+                    
+                    button.addEventListener('mouseenter', () => {
+                        button.style.background = '#1b1b1b';
+                    });
+            
+                    button.addEventListener('mouseleave', () => {
+                        button.style.background = '#111';
+                    });
+            
+                    button.addEventListener('click', async () => {
+                        const codeEl = pre.querySelector('code');
+                        const textToCopy = codeEl ? codeEl.innerText : pre.innerText.trim();
+            
+                        try {
+                            await navigator.clipboard.writeText(textToCopy);
+                            const originalText = button.textContent;
+                            button.textContent = 'Copied';
+                            setTimeout(() => {
+                                button.textContent = originalText;
+                            }, 1500);
+                        } catch (error) {
+                            console.error('Copy failed', error);
+                            button.textContent = 'Error';
+                            setTimeout(() => {
+                                button.textContent = 'Copy';
+                            }, 1500);
+                        }
+                    });
+            
+                    toolbar.appendChild(button);
+            
+                    parent.insertBefore(wrapper, pre);
+                    wrapper.appendChild(toolbar);
+                    wrapper.appendChild(pre);
+                });
+            }
+            
+            function initPreCopyObserver(chatEl) {
+                if (!chatEl || chatEl.copyObserverInitDone) {
+                    return;
+                }
+            
+                const tryAttachObserver = () => {
+                    const root = chatEl.shadowRoot;
+                    if (!root) {
+                        return false;
+                    }
+            
+                    addCopyButtonsToPre(root);
+            
+                    const observer = new MutationObserver(() => {
+                        addCopyButtonsToPre(root);
+                    });
+            
+                    observer.observe(root, {
+                        childList: true,
+                        subtree: true
+                    });
+            
+                    chatEl.copyObserverInitDone = true;
+                    chatEl.copyObserver = observer;
+                    return true;
+                };
+            
+                if (tryAttachObserver()) {
+                    return;
+                }
+            
+                const waitForShadowRoot = () => {
+                    if (tryAttachObserver()) {
+                        return;
+                    }
+                    setTimeout(waitForShadowRoot, 100);
+                };
+            
+                waitForShadowRoot();
+            }
+            
+            initPreCopyObserver(chat);
+        
+        })();        
+
+
+        /*
+
+        Idea for how to send the Feedback
+        
+        
+        function sendRating(chatId) {
+            const el = document.getElementById(chatId);
+            const rating = Number(document.getElementById("ratingInput").value || 0);
+
+            const connect = {
+                url: "{$this->getAiChatFacade()->buildUrlToFacade()}/{$this->getAgentAlias()}/rateChat",
+                method: "POST",
+                additionalBodyProps: {
+                    object: "{$this->getMetaObject()->getAliasWithNamespace()}",
+                    page: "{$this->getPage()->getAliasWithNamespace()}",
+                    widget: chatId,
+                    conversation: el?.conversationId ?? null,
+                    rating
+                }
+            };
+
+            fetch(connect.url, {
+                method: connect.method,
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(connect.additionalBodyProps)
+            })
+            .then(r => r.json())
+            .then(data => {
+                console.log("Antwort von rateChat:", data);
+            })
+            .catch(err => console.error("Fehler:", err));
+        }
+        
+        
+        */
 JS;
 
     }
@@ -325,7 +481,7 @@ JS;
         return $this;
     }
 
-    protected function getPromptSuggestionAgent() : array 
+    protected function getPromptSuggestionsFromAgent() : array 
     {
         if(! $this->agent){
             $this->agent = AiFactory::createAgentFromString($this->getWorkbench(), $this->getAgentAlias());
@@ -337,7 +493,7 @@ JS;
     {
         $all = array_merge(
         $this->promptSuggestionsWidget ?? [],
-        $this->getPromptSuggestionAgent() ?? []
+            $this->getPromptSuggestionsFromAgent() ?? []
         );
 
         return $all;
@@ -456,9 +612,100 @@ JS;
         return $this;
     }
 
+    /**
+     * Enable or disable uploads.
+     *
+     * @uxon-property upload_enabled
+     * @uxon-type boolean
+     * @uxon-default true
+     *
+     * @param bool $value
+     * @return AIChat
+     */
+    public function setUploadEnabled(bool $value) : AIChat
+    {
+        $this->uploadEnabled = $value;
+        return $this;
+    }
+
+    /**
+     * Configure allowed upload file extensions.
+     *
+     * @uxon-property allowed_file_extensions
+     * @uxon-type array
+     * @uxon-required false
+     * @uxon-template [".pdf"]
+     *
+     * @param array $value
+     * @return AIChat
+     */
+    protected function setAllowedFileExtensions(array $value) : AIChat
+    {
+        $this->allowedFileExtensions = $this->normalizeAllowedFileExtensions($value);
+        return $this;
+    }
+
+    /**
+     * Normalize allowed file extensions to .ext lowercase strings without duplicates.
+     *
+     * @param mixed $formats
+     * @return array
+     */
+    private function normalizeAllowedFileExtensions($formats) : array
+    {
+        if (is_string($formats)) {
+            $formats = preg_split('/[\s,;]+/', $formats) ?: [];
+        }
+
+        if (! is_array($formats)) {
+            return [];
+        }
+
+        $normalized = [];
+        foreach ($formats as $format) {
+            if (! is_string($format)) {
+                continue;
+            }
+
+            $ext = trim(strtolower($format));
+            if ($ext === '') {
+                continue;
+            }
+            if ($ext[0] !== '.') {
+                $ext = '.' . $ext;
+            }
+            if (! preg_match('/^\.[a-z0-9]+$/', $ext)) {
+                continue;
+            }
+
+            $normalized[$ext] = true;
+        }
+
+        return array_keys($normalized);
+    }
+
+    protected function getMixedFilesAttributeValue() : string
+    {
+        if (! $this->uploadEnabled) {
+            return 'false';
+        }
+
+        if (empty($this->allowedFileExtensions)) {
+            return 'true';
+        }
+
+        $config = [
+            'files' => [
+                'acceptedFormats' => implode(',', $this->allowedFileExtensions)
+            ]
+        ];
+
+        return json_encode($config, JSON_UNESCAPED_SLASHES) ?: 'true';
+    }
+
     protected function getIntroMessage() : string
     {
-        return '{"text": "' . $this->introMessage . '"}';
+        return '{"text": ' . json_encode($this->introMessage, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . '}';
     }
 
     /**

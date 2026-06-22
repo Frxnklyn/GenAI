@@ -1,6 +1,7 @@
 <?php
 namespace axenox\GenAI\Interfaces;
 use exface\Core\Interfaces\DataSources\DataQueryInterface;
+use exface\Core\Interfaces\Filesystem\FileInterface;
 
 /**
  * Common interface for queries for LLM connectors
@@ -36,10 +37,17 @@ interface AiQueryInterface extends DataQueryInterface
     public function isFinished() : bool;
 
     /**
-     * 
+     *
      * @return float|null
      */
-    public function getCostPerMTokens() : ?float;
+    public function getCosts() : ?float;
+
+    /**
+     * Warning payloads from the connector layer.
+     *
+     * @return \exface\Core\Interfaces\Exceptions\ExceptionInterface[]
+     */
+    public function getWarnings() : array;
 
     /**
      * 
@@ -103,4 +111,11 @@ interface AiQueryInterface extends DataQueryInterface
      * @return AiToolCallInterface[]
      */
     public function getToolCalls() : array;
+
+    /**
+     * @return FileInterface[]
+     */
+    public function getFiles() : array;
+    
+    public function hasFiles() : bool;
 }

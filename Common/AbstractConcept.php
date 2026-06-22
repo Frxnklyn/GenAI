@@ -1,6 +1,10 @@
 <?php
 namespace axenox\GenAI\Common;
 
+use axenox\GenAI\Common\Selectors\AiConceptSelector;
+use axenox\GenAI\Common\Selectors\AiToolSelector;
+use axenox\GenAI\Factories\AiFactory;
+use axenox\GenAI\Interfaces\AiAgentInterface;
 use axenox\GenAI\Interfaces\AiPromptInterface;
 use axenox\GenAI\Uxon\AiConceptUxonSchema;
 use exface\Core\CommonLogic\Traits\ImportUxonObjectTrait;
@@ -12,29 +16,56 @@ abstract class AbstractConcept implements AiConceptInterface
 {
     use ImportUxonObjectTrait;
 
-    private $workbench = null;
-
+    private AiAgentInterface $agent;
+    private AiPromptInterface $prompt;
+    private $workbench;
     private $placeholder = null;
+    private $uxon = null;
+    private ?string $alias = null;
+    
+    private $output = null;
 
-    private $prompt = Null;
-
-    public function __construct(WorkbenchInterface $workbench, string $placeholder, AiPromptInterface $prompt, UxonObject $uxon = null)
+    public function __construct(AiAgentInterface $agent, AiPromptInterface $prompt, string $placeholder, UxonObject $uxon = null)
     {
-        $this->workbench = $workbench;
+        $this->agent = $agent;
+        $this->workbench = $agent->getWorkbench();
         $this->placeholder = $placeholder;
         $this->prompt = $prompt;
+        $this->uxon = $uxon;
         
         if ($uxon !== null) {
             $this->importUxonObject($uxon);
         }
     }
 
+    /**
+     * Resolves the placeholder value for this renderer.
+     *
+     * Classes that inherit from this one must define the output that will be returned here.
+     * If a custom output was already set for example for testing through runTest
+     * this method returns that string instead of generating a new result.
+     *
+     * {@inheritDoc}
+     * @see \exface\Core\Interfaces\TemplateRenderers\PlaceholderResolverInterface::resolve()
+     */
+    public function resolve(array $placeholders) : array
+    {
+        $phVals = [];
+        if($this->hasPrescribedOutput()){
+            $phVals[$this->getPlaceholder()] = $this->output;
+        }else{
+            $phVals[$this->getPlaceholder()] = $this->getOutput();
+        }
+
+        return $phVals;
+    }
+        
     public function getWorkbench() : WorkbenchInterface
     {
         return $this->workbench;
     }
 
-    protected function getPlaceholder() : string
+    public function getPlaceholder() : string
     {
         return $this->placeholder;
     }
@@ -50,10 +81,18 @@ abstract class AbstractConcept implements AiConceptInterface
      */
     public function exportUxonObject()
     {
-        $uxon = new UxonObject([
-            'class' => '\\' . __CLASS__
-        ]);
-        // TODO
+        
+        $uxon = $this->uxon;
+        if(!$uxon->hasProperty("output")){
+            $uxon->setProperty(
+                "output",
+                $this->getOutput()
+            );
+            //cache output
+            $this->setOutput($this->getOutput());
+            
+        }
+        
         return $uxon;
     }
 
@@ -67,8 +106,56 @@ abstract class AbstractConcept implements AiConceptInterface
         return AiConceptUxonSchema::class;
     }
 
-    public function getTools() : array
+    /**
+     * {@inheritDoc}
+     * @see AiConceptInterface::getToolModels()
+     */
+    public function getToolModels() : array
     {
         return [];
     }
+    
+    protected function setOutput(string $output) : AiConceptInterface
+    {
+        $this->output = $output;
+        return $this;
+    }
+
+    
+    protected function hasPrescribedOutput() : bool
+    {
+        if ($this->output === null) {
+            return false;
+        } else {
+            return true;
+        }
+    }
+    
+    protected function getAgent() : AiAgentInterface
+    {
+        return $this->agent;
+    }
+
+    /**
+     * Alias of the concept prototype with namespace
+     * 
+     * @uxon-property alias
+     * @uxon-type metamodel:axenox.GenAI.AI_CONCEPT_PROTOTYPE:ALIAS_WITH_NS
+     * @uxon-required true
+     * 
+     * @param string $aliasWithNamespace
+     * @return AiConceptInterface
+     */
+    protected function setAlias(string $aliasWithNamespace) : AiConceptInterface
+    {
+        $this->alias = $aliasWithNamespace;
+        return $this;
+    }
+    
+    public function getAliasWithNamespace() : string
+    {
+        return $this->alias ?? AiFactory::findToolAlias(new AiConceptSelector($this->getWorkbench(), get_class($this)));
+    }
+    
+    abstract protected function getOutput() : string;
 }
