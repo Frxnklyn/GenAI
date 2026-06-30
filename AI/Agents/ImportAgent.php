@@ -86,6 +86,14 @@ class ImportAgent extends GenericAssistant
     private bool $allowEmptyData = true;
 
     private bool $warnOnEmptyData = true;
+
+    private bool $allowStatusMessages = true;
+
+    private string $dataSavedStatusMessage = 'Data saved successfully.';
+
+    private string $dataNotSavedStatusMessage = 'Data not saved.';
+
+    private string $noDataStatusMessage = 'No data generated.';
     
     public function handle(AiPromptInterface $prompt) : AiResponseInterface
     {
@@ -113,11 +121,11 @@ class ImportAgent extends GenericAssistant
             $response->setData($importedSheet);
 
             if ($this->willSaveData()) {
-                $response->addOKStatusMessage('Data saved successfully.');
+                $this->addOKStatusMessage($response, $this->dataSavedStatusMessage);
             } else {
                 $warning = new AiPromptError($this, $prompt, 'Data import completed, but data was not saved.');
                 $this->getConversation($prompt)->saveWarnings([$warning]);
-                $response->addErrorStatusMessage('Data not saved.');
+                $this->addErrorStatusMessage($response, $this->dataNotSavedStatusMessage);
             }
 
             return $response;
@@ -573,6 +581,58 @@ class ImportAgent extends GenericAssistant
         return $this;
     }
 
+    /**
+     * If `true`, status messages like import success, not saved, or no data generated are added to the response.
+     *
+     * @uxon-property allow_status_messages
+     * @uxon-type bool
+     * @uxon-default true
+     */
+    protected function setAllowStatusMessages(bool $trueOrFalse) : ImportAgent
+    {
+        $this->allowStatusMessages = $trueOrFalse;
+        return $this;
+    }
+
+    /**
+     * Status message shown after imported data was saved successfully.
+     *
+     * @uxon-property data_saved_status_message
+     * @uxon-type string
+     * @uxon-default Data saved successfully.
+     */
+    protected function setDataSavedStatusMessage(string $message) : ImportAgent
+    {
+        $this->dataSavedStatusMessage = $message;
+        return $this;
+    }
+
+    /**
+     * Status message shown when imported data was generated but not saved.
+     *
+     * @uxon-property data_not_saved_status_message
+     * @uxon-type string
+     * @uxon-default Data not saved.
+     */
+    protected function setDataNotSavedStatusMessage(string $message) : ImportAgent
+    {
+        $this->dataNotSavedStatusMessage = $message;
+        return $this;
+    }
+
+    /**
+     * Status message shown when the AI response contains no import data.
+     *
+     * @uxon-property no_data_status_message
+     * @uxon-type string
+     * @uxon-default No data generated.
+     */
+    protected function setNoDataStatusMessage(string $message) : ImportAgent
+    {
+        $this->noDataStatusMessage = $message;
+        return $this;
+    }
+
     protected function handleMissingImportData(AiPromptInterface $prompt, AiResponseInterface $response) : AiResponseInterface
     {
         if (! $this->allowEmptyData) {
@@ -585,8 +645,22 @@ class ImportAgent extends GenericAssistant
 
         $warning = new AiPromptError($this, $prompt, 'AI response did not contain import data. Nothing to import.');
         $this->getConversation($prompt)->saveWarning([$warning]);
-        $response->addErrorStatusMessage('No data generated.');
+        $this->addErrorStatusMessage($response, $this->noDataStatusMessage);
         return $response;
+    }
+
+    protected function addOKStatusMessage(AiResponseInterface $response, string $message) : void
+    {
+        if ($this->allowStatusMessages === true && $message !== '') {
+            $response->addOKStatusMessage($message);
+        }
+    }
+
+    protected function addErrorStatusMessage(AiResponseInterface $response, string $message) : void
+    {
+        if ($this->allowStatusMessages === true && $message !== '') {
+            $response->addErrorStatusMessage($message);
+        }
     }
 
     protected function isImportPayloadEmpty($payload) : bool
