@@ -87,6 +87,8 @@ class ImportAgent extends GenericAssistant
 
     private bool $warnOnEmptyData = true;
 
+    //TODO Wenn Pfad x = was bestimmtes ergibt oder leer ist, soll eine Message hinzugefügt werden, dass man das vielleicht auch noch konfigurieren kann
+
     private bool $allowStatusMessages = true;
 
     private string $dataSavedStatusMessage = 'Data saved successfully.';
