@@ -259,7 +259,9 @@ class RunTest extends AbstractActionDeferred
             return $error->getConversationId();
         }
 
-        return $prompt->getConversationUid();
+        return $prompt->getConversation() !== null
+            ? $prompt->getConversation()->getConversationId()
+            : null;
     }
 
     protected function setTestRunUid(string $uid) : AbstractActionDeferred

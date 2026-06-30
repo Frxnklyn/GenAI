@@ -65,12 +65,15 @@ class AiConversation implements AiConversationInterface
      */
     protected function init(?string $conversationId = null, ?AiQueryInterface $query = null) : void
     {
-        $this->conversationId = $conversationId ?? $this->prompt->getConversationUid();
-        if ($this->conversationId !== null) {
-            $this->prompt->setConversationUid($this->conversationId);
-        } else {
+        $existingConversation = $this->prompt->getConversation();
+        $this->conversationId = $conversationId
+            ?? ($existingConversation !== null ? $existingConversation->getConversationId() : null)
+            ?? $this->prompt->getConversationUid();
+        if ($this->conversationId === null) {
             $this->createConversation($query);
         }
+
+        $this->prompt->setConversation($this);
     }
 
     /**
@@ -143,7 +146,7 @@ class AiConversation implements AiConversationInterface
         $conversation->addRow($row);
         $conversation->dataCreate(false, $transaction);
         $this->conversationId = $conversation->getUidColumn()->getValue(0);
-        $this->prompt->setConversationUid($this->conversationId);
+        $this->prompt->setConversation($this);
         $transaction->commit();
 
         return $this->conversationId;

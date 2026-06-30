@@ -141,7 +141,9 @@ class AiChatFacade extends AbstractHttpFacade
                 // Get the prompt from the exception
                 case $exception instanceof AiPromptError:
                     $prompt = $exception->getPrompt();
-                    $conversationID = $prompt->getConversationUid();
+                    $conversationID = $prompt->getConversation() !== null
+                        ? $prompt->getConversation()->getConversationId()
+                        : null;
                     break;
                 // Get the prompt from the request (if already processed by the TaskReader middleware
                 case $request !== null && null !== $prompt = $request->getAttribute(self::REQUEST_ATTR_TASK, null):

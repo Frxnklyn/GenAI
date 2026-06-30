@@ -1,7 +1,6 @@
 <?php
 namespace axenox\GenAI\Interfaces;
 
-use exface\Core\Interfaces\Actions\ActionInterface;
 use exface\Core\Interfaces\Filesystem\FileInterface;
 use exface\Core\Interfaces\iCanGenerateDebugWidgets;
 use exface\Core\Interfaces\Tasks\TaskInterface;
@@ -20,18 +19,14 @@ interface AiPromptInterface extends TaskInterface, iCanGenerateDebugWidgets
     public function getUserPrompt() : string;
 
 
-    /**
-     * 
-     * @return string|null
-     */
-    public function getConversationUid() : ?string;
+    public function getConversation() : ?AiConversationInterface;
+
+    public function setConversation(AiConversationInterface $conversation) : AiPromptInterface;
 
     /**
-     * 
-     * @param string $uid
-     * @return void
+     * Returns an incoming conversation UID from the prompt payload.
      */
-    public function setConversationUid(string $uid) : AiPromptInterface;
+    public function getConversationUid() : ?string;
 
     /**
      * @param string $text

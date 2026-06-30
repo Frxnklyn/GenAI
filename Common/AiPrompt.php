@@ -1,6 +1,7 @@
 <?php
 namespace axenox\GenAI\Common;
 use exface\Core\CommonLogic\Tasks\HttpTask;
+use axenox\GenAI\Interfaces\AiConversationInterface;
 use axenox\GenAI\Interfaces\AiPromptInterface;
 use exface\Core\CommonLogic\UxonObject;
 use exface\Core\CommonLogic\Workbench;
@@ -11,7 +12,9 @@ use exface\Core\Widgets\DebugMessage;
 
 class AiPrompt extends HttpTask implements AiPromptInterface
 {
-    private $conversationId = null;
+    private ?AiConversationInterface $conversation = null;
+
+    private ?string $conversationUid = null;
     
     private $files = [];
     
@@ -28,23 +31,32 @@ class AiPrompt extends HttpTask implements AiPromptInterface
         return implode(PHP_EOL, $this->getUserMessages());
     }
 
-    /**
-     * 
-     * @see \axenox\GenAI\Interfaces\AiPromptInterface::getConversationUid()
-     */
-    public function getConversationUid() : ?string
+    public function getConversation() : ?AiConversationInterface
     {
-        if ($this->conversationId === null) {
-            $params = $this->getParameters();
-            $this->conversationId = ($params['conversation']);
-        }
-        return $this->conversationId;
+        return $this->conversation;
     }
 
-    public function setConversationUid(string $uid) : AiPromptInterface
+    public function setConversation(AiConversationInterface $conversation) : AiPromptInterface
     {
-        $this->conversationId = $uid;
+        $this->conversation = $conversation;
+        $this->conversationUid = $conversation->getConversationId();
         return $this;
+    }
+
+    public function getConversationUid() : ?string
+    {
+        if ($this->conversation !== null) {
+            return $this->conversation->getConversationId();
+        }
+
+        if ($this->conversationUid === null) {
+            $params = $this->getParameters();
+            $this->conversationUid = isset($params['conversation']) && is_string($params['conversation'])
+                ? $params['conversation']
+                : null;
+        }
+
+        return $this->conversationUid;
     }
 
     public function getUserMessages() : array

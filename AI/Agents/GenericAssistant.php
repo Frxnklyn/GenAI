@@ -141,9 +141,6 @@ class GenericAssistant implements AiAgentInterface
     {
         // Initialize the data query
         $query = new OpenAiApiDataQuery($this->workbench);
-        if (null !== $conversationId = $prompt->getConversationUid()) {
-            $query->setConversationUid($conversationId);
-        }
         // Add the user prompt. Do it before initializing the conversation - if it is a new conversation, the user
         // prompt will be used as title.
         $query->appendMessage($prompt->getUserPrompt());
@@ -151,10 +148,7 @@ class GenericAssistant implements AiAgentInterface
         
         // Initialize the conversation
         $conversation = $this->getConversation($prompt, $query);
-        if ($conversationId === null) {
-            $conversationId = $conversation->getConversationId();
-            $prompt->setConversationUid($conversationId);
-        }
+        $query->setConversationUid($conversation->getConversationId());
 
         // Render system prompt
         try {
@@ -227,17 +221,13 @@ class GenericAssistant implements AiAgentInterface
      */
     protected function getConversation(AiPromptInterface $prompt, ?AiQueryInterface $query = null) : AiConversationInterface
     {
-        $promptConversationId = $prompt->getConversationUid();
-
-        if ($this->conversation === null) {
-            $this->conversation = new AiConversation($this, $prompt, $promptConversationId, $query);
+        $promptConversation = $prompt->getConversation();
+        if ($promptConversation !== null) {
+            $this->conversation = $promptConversation;
             return $this->conversation;
         }
 
-        if ($promptConversationId === null || $this->conversation->getConversationId() !== $promptConversationId) {
-            $this->conversation = new AiConversation($this, $prompt, $promptConversationId, $query);
-        }
-
+        $this->conversation = new AiConversation($this, $prompt, null, $query);
         return $this->conversation;
     }
     
