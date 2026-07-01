@@ -91,6 +91,58 @@ class AiConversation implements AiConversationInterface
         return $this->conversationId;
     }
 
+    public function getMessagesByType(string $messageType) : array
+    {
+        $messageSheet = DataSheetFactory::createFromObjectIdOrAlias($this->workbench, 'axenox.GenAI.AI_MESSAGE');
+        $messageSheet->getColumns()->addFromExpression('MESSAGE');
+        $messageSheet->getFilters()->addConditionFromString('AI_CONVERSATION', $this->getConversationId());
+        $messageSheet->getFilters()->addConditionFromString('ROLE', $messageType);
+        $messageSheet->getSorters()->addFromString('SEQUENCE_NUMBER', 'ASC');
+        $messageSheet->dataRead();
+
+        $messages = [];
+        foreach ($messageSheet->getRows() as $row) {
+            $messages[] = isset($row['MESSAGE']) ? (string) $row['MESSAGE'] : '';
+        }
+
+        return $messages;
+    }
+
+    public function getSystemMessages() : array
+    {
+        return $this->getMessagesByType(AiMessageTypeDataType::SYSTEM);
+    }
+
+    public function getUserMessages() : array
+    {
+        return $this->getMessagesByType(AiMessageTypeDataType::USER);
+    }
+
+    public function getAssistantMessages() : array
+    {
+        return $this->getMessagesByType(AiMessageTypeDataType::ASSISTANT);
+    }
+
+    public function getToolMessages() : array
+    {
+        return $this->getMessagesByType(AiMessageTypeDataType::TOOL);
+    }
+
+    public function getToolCallingMessages() : array
+    {
+        return $this->getMessagesByType(AiMessageTypeDataType::TOOLCALLING);
+    }
+
+    public function getWarningMessages() : array
+    {
+        return $this->getMessagesByType(AiMessageTypeDataType::WARNING);
+    }
+
+    public function getErrorMessages() : array
+    {
+        return $this->getMessagesByType(AiMessageTypeDataType::ERROR);
+    }
+
     /**
      * Creates a new conversation row and stores the generated UID.
      *
@@ -164,8 +216,13 @@ class AiConversation implements AiConversationInterface
      */
     public function saveSystemPrompt(AiQueryInterface $query, string $systemPrompt, array $tools = [], ?array $responseJsonSchema = null) : string
     {
-        $transaction = $this->workbench->data()->startTransaction();
         $this->sequenceNumber = $query->getSequenceNumber();
+
+        if ($this->hasSavedSystemPrompt() === true) {
+            return $this->conversationId;
+        }
+
+        $transaction = $this->workbench->data()->startTransaction();
 
         try {
             $message = DataSheetFactory::createFromObjectIdOrAlias($this->workbench, 'axenox.GenAI.AI_MESSAGE');
@@ -197,6 +254,11 @@ class AiConversation implements AiConversationInterface
         }
 
         return $this->conversationId;
+    }
+
+    protected function hasSavedSystemPrompt() : bool
+    {
+        return count($this->getSystemMessages()) > 0;
     }
 
     /**

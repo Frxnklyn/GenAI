@@ -20,6 +20,58 @@ interface AiConversationInterface
     public function getConversationId() : string;
 
     /**
+     * Returns all stored SYSTEM message texts for this conversation.
+     *
+     * In the normal flow this should contain exactly one entry,
+     * because the system prompt is expected to be saved once per conversation.
+     *
+     * @return string[]
+     */
+    public function getSystemMessages() : array;
+
+    /**
+     * Returns all stored USER message texts for this conversation.
+     *
+     * @return string[]
+     */
+    public function getUserMessages() : array;
+
+    /**
+     * Returns all stored ASSISTANT message texts for this conversation.
+     *
+     * @return string[]
+     */
+    public function getAssistantMessages() : array;
+
+    /**
+     * Returns all stored TOOL result message texts for this conversation.
+     *
+     * @return string[]
+     */
+    public function getToolMessages() : array;
+
+    /**
+     * Returns all stored TOOLCALLING message texts for this conversation.
+     *
+     * @return string[]
+     */
+    public function getToolCallingMessages() : array;
+
+    /**
+     * Returns all stored WARNING message texts for this conversation.
+     *
+     * @return string[]
+     */
+    public function getWarningMessages() : array;
+
+    /**
+     * Returns all stored ERROR message texts for this conversation.
+     *
+     * @return string[]
+     */
+    public function getErrorMessages() : array;
+
+    /**
      * Persists the rendered system prompt for the current conversation.
      *
      * @param AiQueryInterface $query Query used to initialize message sequence number.
