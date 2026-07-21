@@ -1,0 +1,61 @@
+{
+    "uid": "0x11f199b2af97146c99b2025041000001",
+    "alias_with_namespace": "axenox.genai.conversation-monitoring",
+    "menu_parent_page_selector": "0x11efb71bcc0c07e2b71b025041000001",
+    "menu_index": 0,
+    "menu_visible": true,
+    "name": "Conversation Monitoring",
+    "description": "",
+    "intro": "",
+    "replaces_page_selector": null,
+    "created_by_user_selector": "0x11e8fe1c902c8ebea23ee4b318306b9a",
+    "created_on": "2026-07-21 15:54:26",
+    "modified_by_user_selector": "0x11e8fe1c902c8ebea23ee4b318306b9a",
+    "modified_on": "2026-07-21 16:06:33",
+    "contents": {
+        "object_alias": "exface.Core.DUMMY",
+        "widget_type": "SplitHorizontal",
+        "panels": [
+            {
+                "height": "70%",
+                "widget_type": "DataTable",
+                "object_alias": "exface.Core.exf_ai_conversation_monitoring_finding",
+                "columns": [
+                    {
+                        "attribute_alias": "classification",
+                        "caption": "Status"
+                    },
+                    {
+                        "attribute_alias": "title"
+                    },
+                    {
+                        "attribute_alias": "description"
+                    }
+                ],
+                "filters": [
+                    {
+                        "attribute_alias": "classification",
+                        "comparator": "==",
+                        "value": "HIGH",
+                        "hidden": true
+                    }
+                ]
+            },
+            {
+                "object_alias": "exface.Core.DUMMY",
+                "widget_type": "SplitVertical",
+                "panels": [
+                    {
+                        "widgets": [
+                            {
+                                "widget_type": "Markdown",
+                                "object_alias": "exface.Core.exf_ai_conversation_monitoring",
+                                "attribute_alias": "analyzed_conversations"
+                            }
+                        ]
+                    }
+                ]
+            }
+        ]
+    }
+}
