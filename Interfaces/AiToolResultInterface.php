@@ -3,6 +3,7 @@ namespace axenox\GenAI\Interfaces;
 use exface\Core\Interfaces\DataTypes\DataTypeInterface;
 use exface\Core\Interfaces\Exceptions\ExceptionInterface;
 use exface\Core\Interfaces\WorkbenchDependantInterface;
+use axenox\GenAI\Interfaces\AiResponseStatusMessageInterface;
 
 /**
  * A container for the result of an individual tools - similar to task results in actions
@@ -43,6 +44,16 @@ interface AiToolResultInterface extends WorkbenchDependantInterface, \Stringable
      * @return DataTypeInterface
      */
     public function getValueDataType() : DataTypeInterface;
+
+    /**
+     * Returns status messages that should be displayed in the chat response.
+     * 
+     * Status messages provide transparency about what the tool did (e.g., "3 records saved").
+     * They are rendered as colored banners in the chat interface.
+     * 
+     * @return AiResponseStatusMessageInterface[]
+     */
+    public function getStatusMessages(): array;
 
     /**
      * Returns an array of additional instructions to be included in the tool response (e.g. explanations, etc.)

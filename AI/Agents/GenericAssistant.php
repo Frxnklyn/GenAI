@@ -120,6 +120,9 @@ class GenericAssistant implements AiAgentInterface
     /** @var AiToolCallResponse[] */
     private array $toolCalls = [];
 
+    /** @var AiResponseStatusMessageInterface[] */
+    private array $toolStatusMessages = [];
+
     private $promptSuggestions = [];
 
     /**
@@ -139,6 +142,9 @@ class GenericAssistant implements AiAgentInterface
 
     public function handle(AiPromptInterface $prompt) : AiResponseInterface
     {
+        // Reset tool-related state for this invocation
+        $this->toolStatusMessages = [];
+        
         // Initialize the data query
         $query = new OpenAiApiDataQuery($this->workbench);
         if (null !== $conversationId = $prompt->getConversationUid()) {
@@ -267,6 +273,10 @@ class GenericAssistant implements AiAgentInterface
                     try {
                         $resultOfTool = $tool->invoke($this, $prompt, $args);
                         $exceptions = $resultOfTool->getExceptions();
+                        // Collect status messages from the tool result
+                        foreach ($resultOfTool->getStatusMessages() as $statusMsg) {
+                            $this->toolStatusMessages[] = $statusMsg;
+                        }
                     } catch (\Throwable $e) {
                         if (! $e instanceof AiToolCriticalError) {
                             $e = new AiToolCriticalError($tool, $prompt, 'Unexpected error in AI tool. ' . $e->getMessage(), null, $e);
@@ -489,6 +499,10 @@ class GenericAssistant implements AiAgentInterface
             $response = new AiResponse($prompt, $query->getAnswerMarkdown(), $conversationId);
         }
         $response->setToolCalls($this->toolCalls);
+        // Add status messages collected from tool calls
+        if (!empty($this->toolStatusMessages)) {
+            $response->addStatusMessages($this->toolStatusMessages);
+        }
         return $response;
     }
 
