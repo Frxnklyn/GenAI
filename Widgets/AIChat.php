@@ -1,9 +1,11 @@
 <?php
 namespace axenox\GenAI\Widgets;
 
+use axenox\GenAI\AI\ResponseStatusMessages\AiStatusMessageWithWidget;
 use exface\Core\CommonLogic\UxonObject;
 use axenox\GenAI\Facades\AiChatFacade;
 use exface\Core\Factories\FacadeFactory;
+use exface\Core\Factories\ActionFactory;
 use exface\Core\Interfaces\Widgets\iContainOtherWidgets;
 use exface\Core\Widgets\InputCustom;
 use exface\Core\Interfaces\Widgets\iFillEntireContainer;
@@ -79,6 +81,25 @@ JS);
         // Disable/enable
         $this->setScriptToDisable("(function(domEl){ if (domEl && domEl.disableSubmitButton !== undefined) domEl.disableSubmitButton()})($('#{$this->getIdOfDeepChat()}')[0]);");
         $this->setScriptToEnable("(function(domEl){ if (domEl && domEl.disableSubmitButton !== undefined) domEl.disableSubmitButton(false)})($('#{$this->getIdOfDeepChat()}')[0]);");
+    }
+
+    /**
+     * Includes session-registered status dialog widgets so Power UI can reconstruct them for AJAX requests.
+     */
+    public function getChildren(): \Iterator
+    {
+        foreach (AiStatusMessageWithWidget::getRegisteredActionUxons($this) as $registrationId => $actionUxon) {
+            $action = ActionFactory::createFromUxon($this->getWorkbench(), $actionUxon, $this);
+            AiStatusMessageWithWidget::configureRegisteredActionWidget(
+                $action,
+                $this,
+                $registrationId
+            );
+            $widget = $action->getWidget();
+            if ($widget !== null) {
+                yield $widget;
+            }
+        }
     }
     
     protected function getIdOfDeepChat() : string
