@@ -1,10 +1,10 @@
 <?php
 namespace axenox\GenAI\Common;
 use exface\Core\CommonLogic\Tasks\ResultData;
+use axenox\GenAI\AI\ResponseStatusMessages\AiResponseStatusMessage;
 use axenox\GenAI\Interfaces\AiResponseInterface;
 use axenox\GenAI\Interfaces\AiResponseStatusMessageInterface;
 use exface\Core\Interfaces\Tasks\TaskInterface;
-use exface\UI5Facade\Facades\UI5Facade;
 
 class AiResponse extends ResultData implements AiResponseInterface
 {

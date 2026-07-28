@@ -1,5 +1,5 @@
 <?php
-namespace axenox\GenAI\Common;
+namespace axenox\GenAI\AI\ResponseStatusMessages;
 
 use axenox\GenAI\Interfaces\AiResponseStatusMessageInterface;
 

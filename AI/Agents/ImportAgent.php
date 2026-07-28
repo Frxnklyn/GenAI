@@ -584,7 +584,7 @@ class ImportAgent extends GenericAssistant
         }
 
         $warning = new AiPromptError($this, $prompt, 'AI response did not contain import data. Nothing to import.');
-        $this->getConversation($prompt)->saveWarning([$warning]);
+        $this->getConversation($prompt)->saveWarnings([$warning]);
         $response->addErrorStatusMessage('No data generated.');
         return $response;
     }
