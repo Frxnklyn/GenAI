@@ -29,6 +29,11 @@ interface AiResponseInterface extends ResultDataInterface
     public function addErrorStatusMessage(string $message) : AiResponseInterface;
 
     /**
+     * Add a single status message.
+     */
+    public function addStatusMessage(AiResponseStatusMessageInterface $message) : AiResponseInterface;
+
+    /**
      * Add multiple status messages from tools or other sources
      * 
      * @param AiResponseStatusMessageInterface[] $messages

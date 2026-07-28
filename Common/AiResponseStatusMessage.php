@@ -23,6 +23,7 @@ class AiResponseStatusMessage implements AiResponseStatusMessageInterface
         $this->role = $role;
     }
 
+    //TODO Change to Sematic Colors
     /**
      * Create an OK/success status message
      * 
@@ -31,9 +32,10 @@ class AiResponseStatusMessage implements AiResponseStatusMessageInterface
      */
     public static function ok(string $text): static
     {
-        return new static('ok', $text, 'green');
+        return new static('ok', $text);
     }
 
+    //TODO Change to Sematic Colors
     /**
      * Create an error status message
      * 
@@ -42,9 +44,10 @@ class AiResponseStatusMessage implements AiResponseStatusMessageInterface
      */
     public static function error(string $text): static
     {
-        return new static('error', $text, 'red');
+        return new static('error', $text);
     }
 
+    //TODO Change to Sematic Colors
     /**
      * Create an info status message
      * 
@@ -56,6 +59,7 @@ class AiResponseStatusMessage implements AiResponseStatusMessageInterface
         return new static('info', $text, 'blue');
     }
 
+    //TODO Change to Sematic Colors
     /**
      * Create a warning status message
      * 

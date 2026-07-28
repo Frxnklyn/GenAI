@@ -64,17 +64,27 @@ class AiResponse extends ResultData implements AiResponseInterface
         return $this->statusMessages;
     }
     
-    //TODO Change to Semantic Colors
     public function addErrorStatusMessage(string $message) : self
     {
         $this->statusMessages[] = AiResponseStatusMessage::error($message);
         return $this;
     }
     
-    //TODO Change to Semantic Colors
     public function addOKStatusMessage(string $message) : self
     {
         $this->statusMessages[] = AiResponseStatusMessage::ok($message);
+        return $this;
+    }
+
+    /**
+     * Add a single status message
+     * 
+     * @param AiResponseStatusMessageInterface $message
+     * @return AiResponse
+     */
+    public function addStatusMessage(AiResponseStatusMessageInterface $message): self
+    {
+        $this->statusMessages[] = $message;
         return $this;
     }
 
