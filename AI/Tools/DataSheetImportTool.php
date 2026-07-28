@@ -2,12 +2,15 @@
 
 namespace axenox\GenAI\AI\Tools;
 
+use axenox\GenAI\AI\ResponseStatusMessages\AiResponseStatusMessage;
+use axenox\GenAI\AI\ResponseStatusMessages\AiStatusMessageWithWidget;
 use axenox\GenAI\Common\AbstractAiTool;
 use axenox\GenAI\Common\AiToolResultString;
 use axenox\GenAI\Common\DataSheetSchema;
 use axenox\GenAI\Exceptions\AiToolRuntimeError;
 use axenox\GenAI\Interfaces\AiAgentInterface;
 use axenox\GenAI\Interfaces\AiPromptInterface;
+use axenox\GenAI\Interfaces\AiResponseStatusMessageInterface;
 use axenox\GenAI\Interfaces\AiToolResultInterface;
 use exface\Core\CommonLogic\Actions\ServiceParameter;
 use exface\Core\CommonLogic\UxonObject;
@@ -15,6 +18,7 @@ use exface\Core\DataTypes\MarkdownDataType;
 use exface\Core\Exceptions\RuntimeException;
 use exface\Core\Factories\DataSheetFactory;
 use exface\Core\Factories\DataTypeFactory;
+use exface\Core\Interfaces\DataSheets\DataSheetInterface;
 use exface\Core\Interfaces\DataTypes\DataTypeInterface;
 use exface\Core\Interfaces\Exceptions\ExceptionInterface;
 use exface\Core\Interfaces\Log\LoggerInterface;
@@ -22,7 +26,11 @@ use exface\Core\Interfaces\Model\MetaObjectInterface;
 use exface\Core\Interfaces\WorkbenchInterface;
 
 /**
- * Save data to the data source by passing a UXON model for a DataSheet
+ * Imports DataSheet UXON and shows every prepared sheet in a review dialog.
+ *
+ * By default, data is saved immediately. Set `auto_save` to `false` to leave
+ * it unsaved and let the user review, edit and save all generated attributes
+ * from the status-message dialog.
  * 
  * @author Brookly Fränzschky, Andrej Kabachnik
  */
@@ -36,6 +44,8 @@ class DataSheetImportTool extends AbstractAiTool
 
     private ?DataSheetSchema $dataSchema = null;
 
+    private bool $autoSave = true;
+
     /**
      * @var DataSheetSchema[]|null
      */
@@ -45,6 +55,7 @@ class DataSheetImportTool extends AbstractAiTool
     {
         $result = null;
         $warnings = [];
+        $statusMessages = [];
         try{
             $payload = $arguments[0] ?? null;
             if ($payload === null) {
@@ -63,8 +74,14 @@ class DataSheetImportTool extends AbstractAiTool
                         continue;
                     }
                     $sheet = DataSheetFactory::createFromUxon($this->getWorkbench(), $item);
-                    $sheet->dataSave();
-                    $messages[] = 'Imported ' . count($sheet->getRows()) . ' row(s) into "' . $sheet->getMetaObject()->getAliasWithNamespace() . '".';
+                    $rowCount = count($sheet->getRows());
+                    if ($this->autoSave) {
+                        $sheet->dataSave();
+                        $messages[] = 'Imported ' . $rowCount . ' row(s) into "' . $sheet->getMetaObject()->getAliasWithNamespace() . '".';
+                    } else {
+                        $messages[] = 'Prepared ' . $rowCount . ' row(s) for "' . $sheet->getMetaObject()->getAliasWithNamespace() . '". The data has not been saved yet.';
+                    }
+                    $statusMessages[] = $this->createImportStatusMessage($prompt, $sheet);
                 }
             }
 
@@ -77,6 +94,9 @@ class DataSheetImportTool extends AbstractAiTool
             $result = new AiToolResultString($this, $arguments, $message, $this->getReturnDataType());
             foreach ($warnings as $warning) {
                 $result->addException($warning);
+            }
+            foreach ($statusMessages as $statusMessage) {
+                $result->addStatusMessage($statusMessage);
             }
         }catch (\Throwable $e) {
             $message = 'Error during import: ' . $e->getMessage();
@@ -92,6 +112,76 @@ class DataSheetImportTool extends AbstractAiTool
         }
 
         return $result;
+    }
+
+    /**
+     * Creates a status message that previews saved data or offers editing and saving for unsaved data.
+     */
+    protected function createImportStatusMessage(AiPromptInterface $prompt, DataSheetInterface $sheet): AiResponseStatusMessageInterface
+    {
+        $rowCount = count($sheet->getRows());
+        $objectAlias = $sheet->getMetaObject()->getAliasWithNamespace();
+        $text = $this->autoSave
+            ? 'Imported ' . $rowCount . ' row(s) into "' . $objectAlias . '".'
+            : 'Prepared ' . $rowCount . ' unsaved row(s) for "' . $objectAlias . '".';
+
+        if (! $prompt->isTriggeredOnPage()) {
+            return $this->autoSave
+                ? AiResponseStatusMessage::ok($text)
+                : AiResponseStatusMessage::info($text);
+        }
+
+        $columns = [];
+        foreach ($sheet->getColumns() as $column) {
+            $attributeAlias = $column->getAttributeAlias();
+            if ($attributeAlias !== null && $attributeAlias !== '') {
+                $columns[] = ['attribute_alias' => $attributeAlias];
+            }
+        }
+
+        $widget = [
+            'widget_type' => $this->autoSave ? 'DataTable' : 'DataSpreadSheet',
+            'object_alias' => $objectAlias,
+            'values_data_sheet' => $sheet->exportUxonObject()->toArray(),
+            'columns' => $columns,
+            'lazy_loading' => false,
+            'paginate' => false,
+        ];
+        if (! $this->autoSave) {
+            $widget['editable'] = true;
+            $widget['buttons'] = [[
+                'action_alias' => 'exface.Core.SaveData',
+            ]];
+        }
+
+        return new AiStatusMessageWithWidget(
+            $text,
+            new UxonObject([
+                'alias' => 'exface.Core.ShowDialog',
+                'widget' => $widget,
+            ]),
+            $this->autoSave ? 'View data' : 'Review and save',
+            $this->autoSave ? 'ok' : 'info',
+            $this->autoSave ? 'green' : 'blue',
+            'ai',
+            $prompt->getWidgetTriggeredBy()
+        );
+    }
+
+    /**
+     * Set to FALSE to prepare imported data without saving it automatically.
+     *
+     * Unsaved data is displayed in an editable status-message dialog with a
+     * save button, allowing the user to review all generated attributes first.
+     *
+     * @uxon-property auto_save
+     * @uxon-type boolean
+     * @uxon-default true
+     */
+    protected function setAutoSave(bool $autoSave): DataSheetImportTool
+    {
+        $this->autoSave = $autoSave;
+        return $this;
     }
 
     /**

@@ -1,9 +1,12 @@
 <?php
 namespace axenox\GenAI\AI\Agents;
 
+use axenox\GenAI\AI\ResponseStatusMessages\AiResponseStatusMessage;
+use axenox\GenAI\AI\ResponseStatusMessages\AiStatusMessageWithWidget;
 use axenox\GenAI\Common\DataSheetSchema;
 use axenox\GenAI\Exceptions\AiPromptError;
 use axenox\GenAI\Interfaces\AiResponseInterface;
+use axenox\GenAI\Interfaces\AiResponseStatusMessageInterface;
 use exface\Core\CommonLogic\UxonObject;
 use exface\Core\Exceptions\RuntimeException;
 use axenox\GenAI\Interfaces\AiPromptInterface;
@@ -112,13 +115,8 @@ class ImportAgent extends GenericAssistant
             $importedSheet = $this->dataSave(UxonObject::fromAnything($payload));
             $response->setData($importedSheet);
 
-            if ($this->willSaveData()) {
-                $response->addOKStatusMessage('Data saved successfully.');
-            } else {
-                $warning = new AiPromptError($this, $prompt, 'Data import completed, but data was not saved.');
-                $this->getConversation($prompt)->saveWarnings([$warning]);
-                $response->addErrorStatusMessage('Data not saved.');
-            }
+            $statusMessage = $this->createImportStatusMessage($prompt, $importedSheet);
+            $response->addStatusMessage($statusMessage);
 
             return $response;
         } catch (\Throwable $e) {
@@ -126,6 +124,83 @@ class ImportAgent extends GenericAssistant
                 new AiPromptError($this, $prompt, 'Failed to import AI data. ' . $e->getMessage(), null, $e)
             );
             throw $e;
+        }
+    }
+
+    /**
+     * Creates a status message that previews saved data or offers editing and saving for unsaved data.
+     */
+    protected function createImportStatusMessage(AiPromptInterface $prompt, DataSheetInterface $sheet): AiResponseStatusMessageInterface
+    {
+        $rowCount = count($sheet->getRows());
+        $objectAlias = $sheet->getMetaObject()->getAliasWithNamespace();
+        $wasSaved = $this->willSaveData();
+        
+        $text = $wasSaved
+            ? 'Imported ' . $rowCount . ' row(s) into "' . $objectAlias . '"'
+            : 'Prepared ' . $rowCount . ' unsaved row(s) for "' . $objectAlias . '".';
+
+        // Falls nicht auf einer Seite ausgelöst, nur einfache Nachricht
+        if (! $prompt->isTriggeredOnPage()) {
+            return $wasSaved
+                ? AiResponseStatusMessage::ok($text)
+                : AiResponseStatusMessage::info($text);
+        }
+
+        // Spalten sammeln
+        $columns = [];
+        foreach ($sheet->getColumns() as $column) {
+            $attributeAlias = $column->getAttributeAlias();
+            if ($attributeAlias !== null && $attributeAlias !== '') {
+                $columns[] = ['attribute_alias' => $attributeAlias];
+            }
+        }
+
+        // Widget zusammenstellen für gespeicherte Daten (DataTable mit View)
+        if ($wasSaved) {
+            $widget = [
+                'widget_type' => 'DataTable',
+                'object_alias' => $objectAlias,
+                'values_data_sheet' => $sheet->exportUxonObject()->toArray(),
+                'columns' => $columns,
+                'lazy_loading' => false,
+                'paginate' => false,
+            ];
+
+            return new AiStatusMessageWithWidget(
+                $text,
+                new UxonObject([
+                    'alias' => 'exface.Core.ShowDialog',
+                    'widget' => $widget,
+                ]),
+                'View data',
+                'ok',
+                'green',
+                'ai',
+                $prompt->getWidgetTriggeredBy()
+            );
+        }
+
+        $prefill = $sheet->exportUxonObject();
+
+        // Für ungespeicherte Daten: ShowObjectCreateDialog mit prefill_data_sheet
+        if (! $wasSaved) {
+            $dialogUxon = new UxonObject([
+                'alias' => 'exface.Core.ShowObjectCreateDialog',
+                'object_alias' => $objectAlias,
+                'prefill_with_input_data' => false,
+                'prefill_data_sheet' => $prefill->toArray(),
+            ]);
+
+            return new AiStatusMessageWithWidget(
+                $text,
+                $dialogUxon,
+                'Review and save',
+                'info',
+                'blue',
+                'ai',
+                $prompt->getWidgetTriggeredBy()
+            );
         }
     }
     
@@ -585,7 +660,24 @@ class ImportAgent extends GenericAssistant
 
         $warning = new AiPromptError($this, $prompt, 'AI response did not contain import data. Nothing to import.');
         $this->getConversation($prompt)->saveWarnings([$warning]);
-        $response->addErrorStatusMessage('No data generated.');
+        
+        $statusMessage = AiStatusMessageWithWidget::error(
+            'No data generated.',
+            new UxonObject([
+                'alias' => 'exface.Core.ShowDialog',
+                'widget' => [
+                    'widget_type' => 'Message',
+                    'text' => 'The AI could not generate any data from the input. Please try again with more detailed instructions or different source data.',
+                    'type' => 'warning',
+                ],
+            ]),
+            'Failed to generate data',
+            'error',
+            'red',
+            'ai',
+            $prompt->isTriggeredOnPage() ? $prompt->getWidgetTriggeredBy() : null
+        );
+        $response->addStatusMessage($statusMessage);
         return $response;
     }
 
