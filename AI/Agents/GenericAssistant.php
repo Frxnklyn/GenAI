@@ -3,6 +3,7 @@ namespace axenox\GenAI\AI\Agents;
 
 use axenox\GenAI\Common\AiResponse;
 use axenox\GenAI\Common\AiConversation;
+use axenox\GenAI\Common\AiStatusMessageWithWidget;
 use axenox\GenAI\Common\AiToolCallResponse;
 use axenox\GenAI\Common\AiToolResultString;
 use axenox\GenAI\Common\DataQueries\OpenAiApiDataQuery;
@@ -500,9 +501,10 @@ class GenericAssistant implements AiAgentInterface
         }
         $response->setToolCalls($this->toolCalls);
         // Add status messages collected from tool calls
-        if (!empty($this->toolStatusMessages)) {
-            $response->addStatusMessages($this->toolStatusMessages);
+        foreach ($this->toolStatusMessages as $statusMessage) {
+            $response->addStatusMessage($statusMessage);
         }
+        
         return $response;
     }
 

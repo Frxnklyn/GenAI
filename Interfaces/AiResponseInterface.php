@@ -34,14 +34,6 @@ interface AiResponseInterface extends ResultDataInterface
     public function addStatusMessage(AiResponseStatusMessageInterface $message) : AiResponseInterface;
 
     /**
-     * Add multiple status messages from tools or other sources
-     * 
-     * @param AiResponseStatusMessageInterface[] $messages
-     * @return AiResponseInterface
-     */
-    public function addStatusMessages(array $messages) : AiResponseInterface;
-
-    /**
      * Get all status messages for display in the chat.
      * 
      * Returns an array of AiResponseStatusMessageInterface objects that provide transparency

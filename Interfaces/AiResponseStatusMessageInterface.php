@@ -35,7 +35,7 @@ interface AiResponseStatusMessageInterface
      * 
      * @return string HTML that can be displayed in the chat
      */
-    public function getHtml(): string;
+    public function buildHTML(): string;
 
     /**
      * Get the role for DeepChat format (typically 'ai')

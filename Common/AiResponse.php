@@ -89,20 +89,6 @@ class AiResponse extends ResultData implements AiResponseInterface
     }
 
     /**
-     * {@inheritDoc}
-     * Add status messages from an array of AiResponseStatusMessageInterface
-     */
-    public function addStatusMessages(array $messages) : AiResponseInterface
-    {
-        foreach ($messages as $msg) {
-            if ($msg instanceof AiResponseStatusMessageInterface) {
-                $this->statusMessages[] = $msg;
-            }
-        }
-        return $this;
-    }
-
-    /**
      * @param AiToolCallResponse[] $toolCalls
      */
     public function setToolCalls(array $toolCalls): AiResponse

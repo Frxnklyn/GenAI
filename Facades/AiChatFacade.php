@@ -95,7 +95,7 @@ class AiChatFacade extends AbstractHttpFacade
                     foreach ($response->getStatusMessages() as $msg) {
                         $additionalMessages[] = [
                             'role' => $msg->getRole(),
-                            'html' => $msg->getHtml()
+                            'html' => $msg->buildHTML()
                         ];
                     }
                     

@@ -101,7 +101,7 @@ class AiStatusMessageWithWidget implements AiResponseStatusMessageInterface
 	/**
 	 * Renders the trigger and embeds the trusted server-rendered widget fragment.
 	 */
-	public function getHtml(): string
+	public function buildHTML(): string
 	{
 		$text = htmlspecialchars($this->text, ENT_QUOTES, 'UTF-8');
 		$buttonLabel = htmlspecialchars($this->buttonLabel, ENT_QUOTES, 'UTF-8');

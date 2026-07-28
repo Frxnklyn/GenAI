@@ -91,7 +91,7 @@ class AiResponseStatusMessage implements AiResponseStatusMessageInterface
         return $this->role;
     }
 
-    public function getHtml(): string
+    public function buildHTML(): string
     {
         return '<div style="color:' . $this->color . '; font-weight:500;">' 
             . htmlspecialchars($this->text, ENT_QUOTES, 'UTF-8') 
