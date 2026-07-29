@@ -4,6 +4,8 @@ namespace axenox\GenAI\AI\Tools;
 
 use axenox\GenAI\AI\ResponseStatusMessages\AiResponseStatusMessage;
 use axenox\GenAI\AI\ResponseStatusMessages\AiStatusMessageWithWidget;
+use axenox\GenAI\AI\UxonPresets\DataSheetPreviewUxonPreset;
+use axenox\GenAI\AI\UxonPresets\DataSheetReviewUxonPreset;
 use axenox\GenAI\Common\AbstractAiTool;
 use axenox\GenAI\Common\AiToolResultString;
 use axenox\GenAI\Common\DataSheetSchema;
@@ -131,35 +133,13 @@ class DataSheetImportTool extends AbstractAiTool
                 : AiResponseStatusMessage::info($text);
         }
 
-        $columns = [];
-        foreach ($sheet->getColumns() as $column) {
-            $attributeAlias = $column->getAttributeAlias();
-            if ($attributeAlias !== null && $attributeAlias !== '') {
-                $columns[] = ['attribute_alias' => $attributeAlias];
-            }
-        }
-
-        $widget = [
-            'widget_type' => $this->autoSave ? 'DataTable' : 'DataSpreadSheet',
-            'object_alias' => $objectAlias,
-            'values_data_sheet' => $sheet->exportUxonObject()->toArray(),
-            'columns' => $columns,
-            'lazy_loading' => false,
-            'paginate' => false,
-        ];
-        if (! $this->autoSave) {
-            $widget['editable'] = true;
-            $widget['buttons'] = [[
-                'action_alias' => 'exface.Core.SaveData',
-            ]];
-        }
+        $actionUxon = $this->autoSave
+            ? (new DataSheetPreviewUxonPreset())->createActionUxon($sheet)
+            : (new DataSheetReviewUxonPreset())->createActionUxon($sheet);
 
         return new AiStatusMessageWithWidget(
             $text,
-            new UxonObject([
-                'alias' => 'exface.Core.ShowDialog',
-                'widget' => $widget,
-            ]),
+            $actionUxon,
             $this->autoSave ? 'View data' : 'Review and save',
             $this->autoSave ? 'ok' : 'info',
             $this->autoSave ? 'green' : 'blue',

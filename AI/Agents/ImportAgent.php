@@ -3,6 +3,8 @@ namespace axenox\GenAI\AI\Agents;
 
 use axenox\GenAI\AI\ResponseStatusMessages\AiResponseStatusMessage;
 use axenox\GenAI\AI\ResponseStatusMessages\AiStatusMessageWithWidget;
+use axenox\GenAI\AI\UxonPresets\DataSheetCreateDialogUxonPreset;
+use axenox\GenAI\AI\UxonPresets\DataSheetPreviewUxonPreset;
 use axenox\GenAI\Common\DataSheetSchema;
 use axenox\GenAI\Exceptions\AiPromptError;
 use axenox\GenAI\Interfaces\AiResponseInterface;
@@ -147,32 +149,10 @@ class ImportAgent extends GenericAssistant
                 : AiResponseStatusMessage::info($text);
         }
 
-        // Spalten sammeln
-        $columns = [];
-        foreach ($sheet->getColumns() as $column) {
-            $attributeAlias = $column->getAttributeAlias();
-            if ($attributeAlias !== null && $attributeAlias !== '') {
-                $columns[] = ['attribute_alias' => $attributeAlias];
-            }
-        }
-
-        // Widget zusammenstellen für gespeicherte Daten (DataTable mit View)
         if ($wasSaved) {
-            $widget = [
-                'widget_type' => 'DataTable',
-                'object_alias' => $objectAlias,
-                'values_data_sheet' => $sheet->exportUxonObject()->toArray(),
-                'columns' => $columns,
-                'lazy_loading' => false,
-                'paginate' => false,
-            ];
-
             return new AiStatusMessageWithWidget(
                 $text,
-                new UxonObject([
-                    'alias' => 'exface.Core.ShowDialog',
-                    'widget' => $widget,
-                ]),
+                (new DataSheetPreviewUxonPreset())->createActionUxon($sheet),
                 'View data',
                 'ok',
                 'green',
@@ -181,20 +161,10 @@ class ImportAgent extends GenericAssistant
             );
         }
 
-        $prefill = $sheet->exportUxonObject();
-
-        // Für ungespeicherte Daten: ShowObjectCreateDialog mit prefill_data_sheet
         if (! $wasSaved) {
-            $dialogUxon = new UxonObject([
-                'alias' => 'exface.Core.ShowObjectCreateDialog',
-                'object_alias' => $objectAlias,
-                'prefill_with_input_data' => false,
-                'prefill_data_sheet' => $prefill->toArray(),
-            ]);
-
             return new AiStatusMessageWithWidget(
                 $text,
-                $dialogUxon,
+                (new DataSheetCreateDialogUxonPreset())->createActionUxon($sheet),
                 'Review and save',
                 'info',
                 'blue',
@@ -661,22 +631,7 @@ class ImportAgent extends GenericAssistant
         $warning = new AiPromptError($this, $prompt, 'AI response did not contain import data. Nothing to import.');
         $this->getConversation($prompt)->saveWarnings([$warning]);
         
-        $statusMessage = AiStatusMessageWithWidget::error(
-            'No data generated.',
-            new UxonObject([
-                'alias' => 'exface.Core.ShowDialog',
-                'widget' => [
-                    'widget_type' => 'Message',
-                    'text' => 'The AI could not generate any data from the input. Please try again with more detailed instructions or different source data.',
-                    'type' => 'warning',
-                ],
-            ]),
-            'Failed to generate data',
-            'error',
-            'red',
-            'ai',
-            $prompt->isTriggeredOnPage() ? $prompt->getWidgetTriggeredBy() : null
-        );
+        $statusMessage = AiResponseStatusMessage::error("Import failed");
         $response->addStatusMessage($statusMessage);
         return $response;
     }
