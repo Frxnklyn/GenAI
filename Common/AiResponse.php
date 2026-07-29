@@ -1,7 +1,7 @@
 <?php
 namespace axenox\GenAI\Common;
 use exface\Core\CommonLogic\Tasks\ResultData;
-use axenox\GenAI\AI\ResponseStatusMessages\AiResponseStatusMessage;
+use axenox\GenAI\Factories\AiResponseStatusMessageFactory;
 use axenox\GenAI\Interfaces\AiResponseInterface;
 use axenox\GenAI\Interfaces\AiResponseStatusMessageInterface;
 use exface\Core\Interfaces\Tasks\TaskInterface;
@@ -66,13 +66,13 @@ class AiResponse extends ResultData implements AiResponseInterface
     
     public function addErrorStatusMessage(string $message) : self
     {
-        $this->statusMessages[] = AiResponseStatusMessage::error($message);
+        $this->statusMessages[] = AiResponseStatusMessageFactory::createErrorMessage($message);
         return $this;
     }
     
     public function addOKStatusMessage(string $message) : self
     {
-        $this->statusMessages[] = AiResponseStatusMessage::ok($message);
+        $this->statusMessages[] = AiResponseStatusMessageFactory::createOkMessage($message);
         return $this;
     }
 

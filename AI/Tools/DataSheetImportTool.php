@@ -2,14 +2,13 @@
 
 namespace axenox\GenAI\AI\Tools;
 
-use axenox\GenAI\AI\ResponseStatusMessages\AiResponseStatusMessage;
-use axenox\GenAI\AI\ResponseStatusMessages\AiStatusMessageWithWidget;
 use axenox\GenAI\AI\UxonPresets\DataSheetPreviewUxonPreset;
 use axenox\GenAI\AI\UxonPresets\DataSheetReviewUxonPreset;
 use axenox\GenAI\Common\AbstractAiTool;
 use axenox\GenAI\Common\AiToolResultString;
 use axenox\GenAI\Common\DataSheetSchema;
 use axenox\GenAI\Exceptions\AiToolRuntimeError;
+use axenox\GenAI\Factories\AiResponseStatusMessageFactory;
 use axenox\GenAI\Interfaces\AiAgentInterface;
 use axenox\GenAI\Interfaces\AiPromptInterface;
 use axenox\GenAI\Interfaces\AiResponseStatusMessageInterface;
@@ -18,6 +17,7 @@ use exface\Core\CommonLogic\Actions\ServiceParameter;
 use exface\Core\CommonLogic\UxonObject;
 use exface\Core\DataTypes\MarkdownDataType;
 use exface\Core\Exceptions\RuntimeException;
+use exface\Core\Factories\ActionFactory;
 use exface\Core\Factories\DataSheetFactory;
 use exface\Core\Factories\DataTypeFactory;
 use exface\Core\Interfaces\DataSheets\DataSheetInterface;
@@ -129,22 +129,24 @@ class DataSheetImportTool extends AbstractAiTool
 
         if (! $prompt->isTriggeredOnPage()) {
             return $this->autoSave
-                ? AiResponseStatusMessage::ok($text)
-                : AiResponseStatusMessage::info($text);
+                ? AiResponseStatusMessageFactory::createOkMessage($text)
+                : AiResponseStatusMessageFactory::createInfoMessage($text);
         }
 
+        $contextWidget = $prompt->getWidgetTriggeredBy();
         $actionUxon = $this->autoSave
             ? (new DataSheetPreviewUxonPreset())->createActionUxon($sheet)
             : (new DataSheetReviewUxonPreset())->createActionUxon($sheet);
+        $action = ActionFactory::createFromUxon($this->getWorkbench(), $actionUxon, $contextWidget);
 
-        return new AiStatusMessageWithWidget(
+        return AiResponseStatusMessageFactory::createShowWidgetMessage(
             $text,
-            $actionUxon,
+            $action,
             $this->autoSave ? 'View data' : 'Review and save',
             $this->autoSave ? 'ok' : 'info',
             $this->autoSave ? 'green' : 'blue',
             'ai',
-            $prompt->getWidgetTriggeredBy()
+            $contextWidget
         );
     }
 

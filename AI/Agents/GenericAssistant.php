@@ -1,7 +1,6 @@
 <?php
 namespace axenox\GenAI\AI\Agents;
 
-use axenox\GenAI\AI\ResponseStatusMessages\AiStatusMessageWithWidget;
 use axenox\GenAI\Common\AiResponse;
 use axenox\GenAI\Common\AiConversation;
 use axenox\GenAI\Common\AiToolCallResponse;

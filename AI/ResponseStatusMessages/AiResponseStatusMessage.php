@@ -23,54 +23,6 @@ class AiResponseStatusMessage implements AiResponseStatusMessageInterface
         $this->role = $role;
     }
 
-    //TODO Change to Sematic Colors
-    /**
-     * Create an OK/success status message
-     * 
-     * @param string $text
-     * @return static
-     */
-    public static function ok(string $text): static
-    {
-        return new static('ok', $text);
-    }
-
-    //TODO Change to Sematic Colors
-    /**
-     * Create an error status message
-     * 
-     * @param string $text
-     * @return static
-     */
-    public static function error(string $text): static
-    {
-        return new static('error', $text);
-    }
-
-    //TODO Change to Sematic Colors
-    /**
-     * Create an info status message
-     * 
-     * @param string $text
-     * @return static
-     */
-    public static function info(string $text): static
-    {
-        return new static('info', $text, 'blue');
-    }
-
-    //TODO Change to Sematic Colors
-    /**
-     * Create a warning status message
-     * 
-     * @param string $text
-     * @return static
-     */
-    public static function warning(string $text): static
-    {
-        return new static('warning', $text, 'orange');
-    }
-
     public function getType(): string
     {
         return $this->type;

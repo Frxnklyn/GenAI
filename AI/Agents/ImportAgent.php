@@ -1,18 +1,18 @@
 <?php
 namespace axenox\GenAI\AI\Agents;
 
-use axenox\GenAI\AI\ResponseStatusMessages\AiResponseStatusMessage;
-use axenox\GenAI\AI\ResponseStatusMessages\AiStatusMessageWithWidget;
 use axenox\GenAI\AI\UxonPresets\DataSheetCreateDialogUxonPreset;
 use axenox\GenAI\AI\UxonPresets\DataSheetPreviewUxonPreset;
 use axenox\GenAI\Common\DataSheetSchema;
 use axenox\GenAI\Exceptions\AiPromptError;
+use axenox\GenAI\Factories\AiResponseStatusMessageFactory;
 use axenox\GenAI\Interfaces\AiResponseInterface;
 use axenox\GenAI\Interfaces\AiResponseStatusMessageInterface;
 use exface\Core\CommonLogic\UxonObject;
 use exface\Core\Exceptions\RuntimeException;
 use axenox\GenAI\Interfaces\AiPromptInterface;
 use exface\Core\Factories\DataSheetFactory;
+use exface\Core\Factories\ActionFactory;
 use exface\Core\Interfaces\DataSheets\DataSheetInterface;
 use exface\Core\Interfaces\Model\MetaObjectInterface;
 use exface\Core\Interfaces\WidgetInterface;
@@ -145,31 +145,42 @@ class ImportAgent extends GenericAssistant
         // Falls nicht auf einer Seite ausgelöst, nur einfache Nachricht
         if (! $prompt->isTriggeredOnPage()) {
             return $wasSaved
-                ? AiResponseStatusMessage::ok($text)
-                : AiResponseStatusMessage::info($text);
+                ? AiResponseStatusMessageFactory::createOkMessage($text)
+                : AiResponseStatusMessageFactory::createInfoMessage($text);
         }
 
+        $contextWidget = $prompt->getWidgetTriggeredBy();
         if ($wasSaved) {
-            return new AiStatusMessageWithWidget(
-                $text,
+            $action = ActionFactory::createFromUxon(
+                $this->getWorkbench(),
                 (new DataSheetPreviewUxonPreset())->createActionUxon($sheet),
+                $contextWidget
+            );
+            return AiResponseStatusMessageFactory::createShowWidgetMessage(
+                $text,
+                $action,
                 'View data',
                 'ok',
                 'green',
                 'ai',
-                $prompt->getWidgetTriggeredBy()
+                $contextWidget
             );
         }
 
         if (! $wasSaved) {
-            return new AiStatusMessageWithWidget(
-                $text,
+            $action = ActionFactory::createFromUxon(
+                $this->getWorkbench(),
                 (new DataSheetCreateDialogUxonPreset())->createActionUxon($sheet),
+                $contextWidget
+            );
+            return AiResponseStatusMessageFactory::createShowWidgetMessage(
+                $text,
+                $action,
                 'Review and save',
                 'info',
                 'blue',
                 'ai',
-                $prompt->getWidgetTriggeredBy()
+                $contextWidget
             );
         }
     }
@@ -631,7 +642,7 @@ class ImportAgent extends GenericAssistant
         $warning = new AiPromptError($this, $prompt, 'AI response did not contain import data. Nothing to import.');
         $this->getConversation($prompt)->saveWarnings([$warning]);
         
-        $statusMessage = AiResponseStatusMessage::error("Import failed");
+        $statusMessage = AiResponseStatusMessageFactory::createErrorMessage("Import failed");
         $response->addStatusMessage($statusMessage);
         return $response;
     }
