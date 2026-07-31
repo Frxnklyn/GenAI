@@ -1,8 +1,6 @@
 <?php
 namespace axenox\GenAI\AI\Agents;
 
-use axenox\GenAI\AI\UxonPresets\DataSheetCreateDialogUxonPreset;
-use axenox\GenAI\AI\UxonPresets\DataSheetPreviewUxonPreset;
 use axenox\GenAI\Common\DataSheetSchema;
 use axenox\GenAI\Exceptions\AiPromptError;
 use axenox\GenAI\Factories\AiResponseStatusMessageFactory;
@@ -12,7 +10,6 @@ use exface\Core\CommonLogic\UxonObject;
 use exface\Core\Exceptions\RuntimeException;
 use axenox\GenAI\Interfaces\AiPromptInterface;
 use exface\Core\Factories\DataSheetFactory;
-use exface\Core\Factories\ActionFactory;
 use exface\Core\Interfaces\DataSheets\DataSheetInterface;
 use exface\Core\Interfaces\Model\MetaObjectInterface;
 use exface\Core\Interfaces\WidgetInterface;
@@ -61,6 +58,8 @@ use exface\Core\Interfaces\Widgets\iShowData;
  * should return a meaningful error message, that will be transformed into an exception.
  * 
  */
+
+//TOOD hinzufügen in den instructions keine Emojis erlaubt
 class ImportAgent extends GenericAssistant
 {
     private array $additionalMessages = [];
@@ -151,36 +150,20 @@ class ImportAgent extends GenericAssistant
 
         $contextWidget = $prompt->getWidgetTriggeredBy();
         if ($wasSaved) {
-            $action = ActionFactory::createFromUxon(
-                $this->getWorkbench(),
-                (new DataSheetPreviewUxonPreset())->createActionUxon($sheet),
-                $contextWidget
-            );
-            return AiResponseStatusMessageFactory::createShowWidgetMessage(
+            return AiResponseStatusMessageFactory::createDataSheetMessage(
                 $text,
-                $action,
-                'View data',
-                'ok',
-                'green',
-                'ai',
-                $contextWidget
+                $sheet,
+                $contextWidget,
+                AiResponseStatusMessageFactory::DATA_SHEET_WIDGET_PREVIEW
             );
         }
 
         if (! $wasSaved) {
-            $action = ActionFactory::createFromUxon(
-                $this->getWorkbench(),
-                (new DataSheetCreateDialogUxonPreset())->createActionUxon($sheet),
-                $contextWidget
-            );
-            return AiResponseStatusMessageFactory::createShowWidgetMessage(
+            return AiResponseStatusMessageFactory::createDataSheetMessage(
                 $text,
-                $action,
-                'Review and save',
-                'info',
-                'blue',
-                'ai',
-                $contextWidget
+                $sheet,
+                $contextWidget,
+                AiResponseStatusMessageFactory::DATA_SHEET_WIDGET_CREATE
             );
         }
     }

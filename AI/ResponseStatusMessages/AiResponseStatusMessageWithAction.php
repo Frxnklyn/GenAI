@@ -48,7 +48,7 @@ class AiResponseStatusMessageWithAction implements AiResponseStatusMessageInterf
 		$this->text = $text;
 		$this->buttonLabel = $buttonLabel;
 		$this->type = $type;
-		$this->color = $color;
+		$this->color = $color ?: $this->getDefaultColorForType($type);
 		$this->role = $role;
 	}
 
@@ -160,6 +160,20 @@ HTML;
 		return preg_match('/^(?:#[0-9a-f]{3,8}|[a-z]{3,20})$/i', $this->color) === 1
 			? $this->color
 			: '#2563eb';
+	}
+
+	/**
+	 * Returns the standard display color for a semantic status type.
+	 */
+	private function getDefaultColorForType(string $type): string
+	{
+		return match ($type) {
+			'ok', 'success' => 'green',
+			'error', 'danger' => 'red',
+			'warning' => 'orange',
+			'info' => 'blue',
+			default => 'black',
+		};
 	}
 
 	/**
