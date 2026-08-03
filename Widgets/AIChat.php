@@ -3,8 +3,12 @@ namespace axenox\GenAI\Widgets;
 
 use exface\Core\CommonLogic\UxonObject;
 use axenox\GenAI\Facades\AiChatFacade;
+use exface\Core\Factories\ActionFactory;
 use exface\Core\Factories\FacadeFactory;
+use exface\Core\Factories\WidgetFactory;
+use exface\Core\Interfaces\Actions\ActionInterface;
 use exface\Core\Interfaces\Widgets\iContainOtherWidgets;
+use exface\Core\Widgets\Button;
 use exface\Core\Widgets\InputCustom;
 use exface\Core\Interfaces\Widgets\iFillEntireContainer;
 use axenox\GenAI\Factories\AiFactory;
@@ -20,6 +24,9 @@ use axenox\GenAI\Widgets\parts\MessageRoles;
  */
 class AIChat extends InputCustom implements iFillEntireContainer
 {
+    private const ACTION_REGISTRY_SESSION_NAMESPACE = 'axenox.GenAI.AIChat.ActionWidgets';
+    private const ACTION_REGISTRY_LIMIT = 20;
+
     private $aiChatFacade = null;
 
     private $agentAlias = null;
@@ -41,6 +48,9 @@ class AIChat extends InputCustom implements iFillEntireContainer
     private bool $uploadEnabled = false;
 
     private array $allowedFileExtensions = [];
+
+    /** @var Button[]|null */
+    private ?array $registeredActionWidgetTriggers = null;
 
 
     protected function init()
@@ -79,6 +89,106 @@ JS);
         // Disable/enable
         $this->setScriptToDisable("(function(domEl){ if (domEl && domEl.disableSubmitButton !== undefined) domEl.disableSubmitButton()})($('#{$this->getIdOfDeepChat()}')[0]);");
         $this->setScriptToEnable("(function(domEl){ if (domEl && domEl.disableSubmitButton !== undefined) domEl.disableSubmitButton(false)})($('#{$this->getIdOfDeepChat()}')[0]);");
+    }
+
+    /**
+     * Includes session-registered status dialog widgets so Power UI can reconstruct them for AJAX requests.
+     */
+    public function getChildren(): \Iterator
+    {
+        foreach ($this->getRegisteredActionWidgetTriggers() as $trigger) {
+            yield $trigger;
+        }
+    }
+
+    /**
+     * Registers an action as a child of this chat for later PowerUI requests.
+     */
+    public function registerActionWidget(ActionInterface $action, string $registrationId): void
+    {
+        $triggers = $this->getRegisteredActionWidgetTriggers();
+        $triggers[$registrationId] = $this->createActionWidgetTrigger($action, $registrationId);
+        $this->registeredActionWidgetTriggers = $triggers;
+
+        $scope = $this->getWorkbench()->getContext()->getScopeSession();
+        $key = $this->getActionRegistryKey();
+        $registry = $scope->getVariable($key, self::ACTION_REGISTRY_SESSION_NAMESPACE);
+        $registry = is_array($registry) ? $registry : [];
+        $registry[$registrationId] = $action->exportUxonObject()->toArray();
+
+        if (count($registry) > self::ACTION_REGISTRY_LIMIT) {
+            $registry = array_slice($registry, -self::ACTION_REGISTRY_LIMIT, null, true);
+        }
+
+        $scope->setVariable($key, $registry, self::ACTION_REGISTRY_SESSION_NAMESPACE);
+        // AI responses are generated outside the regular task lifecycle, so persist the registry immediately.
+        $scope->saveContexts();
+    }
+
+    /**
+     * Reconstructs the hidden action triggers owned by this chat from its session registry.
+     *
+     * @return Button[]
+     */
+    private function getRegisteredActionWidgetTriggers(): array
+    {
+        if ($this->registeredActionWidgetTriggers !== null) {
+            return $this->registeredActionWidgetTriggers;
+        }
+
+        $scope = $this->getWorkbench()->getContext()->getScopeSession();
+        $registry = $scope->getVariable(
+            $this->getActionRegistryKey(),
+            self::ACTION_REGISTRY_SESSION_NAMESPACE
+        );
+
+        if (! is_array($registry)) {
+            return $this->registeredActionWidgetTriggers = [];
+        }
+
+        $triggers = [];
+        foreach (array_filter($registry, 'is_array') as $registrationId => $actionUxon) {
+            $trigger = $this->createActionWidgetTrigger(null, (string) $registrationId);
+            $action = ActionFactory::createFromUxon(
+                $this->getWorkbench(),
+                new UxonObject($actionUxon),
+                $trigger
+            );
+            $trigger->setAction($action);
+            $triggers[$registrationId] = $trigger;
+        }
+
+        return $this->registeredActionWidgetTriggers = $triggers;
+    }
+
+    /**
+     * Creates a unique hidden Button that owns one action and its child widget tree.
+     */
+    private function createActionWidgetTrigger(?ActionInterface $action, string $registrationId): Button
+    {
+        /** @var Button $trigger */
+        $trigger = WidgetFactory::createFromUxonInParent(
+            $this,
+            new UxonObject([
+                'widget_type' => 'Button',
+                'id' => $registrationId . '_trigger',
+            ])
+        );
+        if ($action !== null) {
+            // Rebind actions originally created for AIChat so ShowDialog derives its ID space from this unique trigger.
+            $action->setWidgetDefinedIn($trigger);
+            $trigger->setAction($action);
+        }
+
+        return $trigger;
+    }
+
+    /**
+     * Builds the session key for the actions owned by this chat.
+     */
+    private function getActionRegistryKey(): string
+    {
+        return hash('sha256', $this->getPage()->getAliasWithNamespace() . '|' . $this->getId());
     }
     
     protected function getIdOfDeepChat() : string

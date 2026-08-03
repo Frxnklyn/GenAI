@@ -1,9 +1,10 @@
 <?php
 namespace axenox\GenAI\Common;
 use exface\Core\CommonLogic\Tasks\ResultData;
+use axenox\GenAI\Factories\AiResponseStatusMessageFactory;
 use axenox\GenAI\Interfaces\AiResponseInterface;
+use axenox\GenAI\Interfaces\AiResponseStatusMessageInterface;
 use exface\Core\Interfaces\Tasks\TaskInterface;
-use exface\UI5Facade\Facades\UI5Facade;
 
 class AiResponse extends ResultData implements AiResponseInterface
 {
@@ -14,6 +15,7 @@ class AiResponse extends ResultData implements AiResponseInterface
     /** @var AiToolCallResponse[] */
     private array $toolCalls = [];
     
+    /** @var AiResponseStatusMessageInterface[] */
     private array $statusMessages = [];
 
     public function __construct(TaskInterface $prompt, string $answer = null, ?string $conversationId = null, array $rawJson = null)
@@ -62,26 +64,27 @@ class AiResponse extends ResultData implements AiResponseInterface
         return $this->statusMessages;
     }
     
-    protected function addSatusMessage(string $text,string $color) : self
-    {
-        $this->statusMessages[] = [
-            'role' => 'ai',
-            'html' => '<div style="color:' . $color . '; font-weight:500;">' . htmlspecialchars($text, ENT_QUOTES, 'UTF-8') . '</div>'
-        ];;
-        return $this;
-    }
-    
-    //TODO Change to Sematic Colors
     public function addErrorStatusMessage(string $message) : self
     {
-        $this->addSatusMessage($message, 'red');
+        $this->statusMessages[] = AiResponseStatusMessageFactory::createErrorMessage($message);
         return $this;
     }
     
-    //TODO Change to Sematic Colors
     public function addOKStatusMessage(string $message) : self
     {
-        $this->addSatusMessage($message, 'green');
+        $this->statusMessages[] = AiResponseStatusMessageFactory::createOkMessage($message);
+        return $this;
+    }
+
+    /**
+     * Add a single status message
+     * 
+     * @param AiResponseStatusMessageInterface $message
+     * @return AiResponse
+     */
+    public function addStatusMessage(AiResponseStatusMessageInterface $message): self
+    {
+        $this->statusMessages[] = $message;
         return $this;
     }
 

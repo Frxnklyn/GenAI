@@ -28,6 +28,8 @@ class AiToolResultString implements AiToolResultInterface
     /** @var ExceptionInterface[] */
     private array $exceptions;
     private bool $hasCriticalErrors = false;
+    /** @var AiResponseStatusMessageInterface[] */
+    private array $statusMessages = [];
 
     /**
      * @param AiToolInterface $tool
@@ -113,6 +115,27 @@ class AiToolResultString implements AiToolResultInterface
             $this->type = DataTypeFactory::createBaseDataType($this->getWorkbench());
         }
         return $this->type;
+    }
+
+    /**
+     * {@inheritDoc}
+     * @see AiToolResultInterface::getStatusMessages()
+     */
+    public function getStatusMessages(): array
+    {
+        return $this->statusMessages;
+    }
+
+    /**
+     * Add a status message to be displayed in the response
+     * 
+     * @param AiResponseStatusMessageInterface $message
+     * @return $this
+     */
+    public function addStatusMessage(AiResponseStatusMessageInterface $message): static
+    {
+        $this->statusMessages[] = $message;
+        return $this;
     }
 
     /**

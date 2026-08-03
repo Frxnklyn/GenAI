@@ -89,10 +89,20 @@ class AiChatFacade extends AbstractHttpFacade
 
                     $responseCode = 200;
                     $headers['content-type'] = 'application/json';
+                    
+                    // Convert status message interfaces to DeepChat format
+                    $additionalMessages = [];
+                    foreach ($response->getStatusMessages() as $msg) {
+                        $additionalMessages[] = [
+                            'role' => $msg->getRole(),
+                            'html' => $msg->buildHTML()
+                        ];
+                    }
+                    
                     $body = json_encode([
                             'text' => $response->getMessage(),
                             'conversation'=> $response->getConversationId(),
-                            'additionalMessages' => $response->getStatusMessages()
+                            'additionalMessages' => $additionalMessages
                         ]
                         , JSON_UNESCAPED_UNICODE
                     );

@@ -3,7 +3,9 @@ namespace axenox\GenAI\AI\Agents;
 
 use axenox\GenAI\Common\DataSheetSchema;
 use axenox\GenAI\Exceptions\AiPromptError;
+use axenox\GenAI\Factories\AiResponseStatusMessageFactory;
 use axenox\GenAI\Interfaces\AiResponseInterface;
+use axenox\GenAI\Interfaces\AiResponseStatusMessageInterface;
 use exface\Core\CommonLogic\UxonObject;
 use exface\Core\Exceptions\RuntimeException;
 use axenox\GenAI\Interfaces\AiPromptInterface;
@@ -56,6 +58,8 @@ use exface\Core\Interfaces\Widgets\iShowData;
  * should return a meaningful error message, that will be transformed into an exception.
  * 
  */
+
+//TOOD hinzufügen in den instructions keine Emojis erlaubt
 class ImportAgent extends GenericAssistant
 {
     private array $additionalMessages = [];
@@ -112,13 +116,8 @@ class ImportAgent extends GenericAssistant
             $importedSheet = $this->dataSave(UxonObject::fromAnything($payload));
             $response->setData($importedSheet);
 
-            if ($this->willSaveData()) {
-                $response->addOKStatusMessage('Data saved successfully.');
-            } else {
-                $warning = new AiPromptError($this, $prompt, 'Data import completed, but data was not saved.');
-                $this->getConversation($prompt)->saveWarnings([$warning]);
-                $response->addErrorStatusMessage('Data not saved.');
-            }
+            $statusMessage = $this->createImportStatusMessage($prompt, $importedSheet);
+            $response->addStatusMessage($statusMessage);
 
             return $response;
         } catch (\Throwable $e) {
@@ -126,6 +125,46 @@ class ImportAgent extends GenericAssistant
                 new AiPromptError($this, $prompt, 'Failed to import AI data. ' . $e->getMessage(), null, $e)
             );
             throw $e;
+        }
+    }
+
+    /**
+     * Creates a status message that previews saved data or offers editing and saving for unsaved data.
+     */
+    protected function createImportStatusMessage(AiPromptInterface $prompt, DataSheetInterface $sheet): AiResponseStatusMessageInterface
+    {
+        $rowCount = count($sheet->getRows());
+        $objectAlias = $sheet->getMetaObject()->getAliasWithNamespace();
+        $wasSaved = $this->willSaveData();
+        
+        $text = $wasSaved
+            ? 'Imported ' . $rowCount . ' row(s) into "' . $objectAlias . '"'
+            : 'Prepared ' . $rowCount . ' unsaved row(s) for "' . $objectAlias . '".';
+
+        // Falls nicht auf einer Seite ausgelöst, nur einfache Nachricht
+        if (! $prompt->isTriggeredOnPage()) {
+            return $wasSaved
+                ? AiResponseStatusMessageFactory::createOkMessage($text)
+                : AiResponseStatusMessageFactory::createInfoMessage($text);
+        }
+
+        $contextWidget = $prompt->getWidgetTriggeredBy();
+        if ($wasSaved) {
+            return AiResponseStatusMessageFactory::createDataSheetMessage(
+                $text,
+                $sheet,
+                $contextWidget,
+                AiResponseStatusMessageFactory::DATA_SHEET_WIDGET_PREVIEW
+            );
+        }
+
+        if (! $wasSaved) {
+            return AiResponseStatusMessageFactory::createDataSheetMessage(
+                $text,
+                $sheet,
+                $contextWidget,
+                AiResponseStatusMessageFactory::DATA_SHEET_WIDGET_CREATE
+            );
         }
     }
     
@@ -584,8 +623,10 @@ class ImportAgent extends GenericAssistant
         }
 
         $warning = new AiPromptError($this, $prompt, 'AI response did not contain import data. Nothing to import.');
-        $this->getConversation($prompt)->saveWarning([$warning]);
-        $response->addErrorStatusMessage('No data generated.');
+        $this->getConversation($prompt)->saveWarnings([$warning]);
+        
+        $statusMessage = AiResponseStatusMessageFactory::createErrorMessage("Import failed");
+        $response->addStatusMessage($statusMessage);
         return $response;
     }
 
