@@ -1,0 +1,429 @@
+{
+    "uid": "0x11f199b2af97146c99b2025041000001",
+    "alias_with_namespace": "axenox.genai.conversation-monitoring",
+    "menu_parent_page_selector": "0x11efb71bcc0c07e2b71b025041000001",
+    "menu_index": 0,
+    "menu_visible": true,
+    "name": "Conversation Monitoring",
+    "description": "Übersicht der täglichen Auswertung des Conversation Monitoring Agents.",
+    "intro": "",
+    "replaces_page_selector": null,
+    "created_by_user_selector": "0x11e8fe1c902c8ebea23ee4b318306b9a",
+    "created_on": "2026-07-21 15:54:26",
+    "modified_by_user_selector": "0x11e8fe1c902c8ebea23ee4b318306b9a",
+    "modified_on": "2026-07-21 16:06:33",
+    "icon": "dashboard",
+    "icon_set": "fa",
+    "contents": {
+        "object_alias": "exface.Core.exf_ai_conversation_monitoring",
+        "widget_type": "SplitVertical",
+        "panels": [
+            {
+                "height": "10%",
+                "caption": "Zeitraum",
+                "widgets": [
+                    {
+                        "widget_type": "Form",
+                        "object_alias": "exface.Core.exf_ai_conversation_monitoring",
+                        "widgets": [
+                            {
+                                "id": "monitoring_date_filter",
+                                "widget_type": "InputDate",
+                                "attribute_alias": "monitoring_date",
+                                "caption": "Monitoring-Tag für die gesamte Seite",
+                                "hint": "Das ausgewählte Datum filtert alle Bereiche dieser Seite.",
+                                "value": "=Lookup('monitoring_date:MAX', 'exface.Core.exf_ai_conversation_monitoring')"
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
+                "height": "22%",
+                "widgets": [
+                    {
+                        "widget_type": "SplitHorizontal",
+                        "object_alias": "exface.Core.exf_ai_conversation_monitoring",
+                        "panels": [
+                            {
+                                "caption": "Analysierte Conversations",
+                                "width": "33%",
+                                "widgets": [
+                                    {
+                                        "widget_type": "Html",
+                                        "object_alias": "exface.Core.exf_ai_conversation_monitoring",
+                                        "value": "=Lookup('analyzed_conversations:SUM', 'exface.Core.exf_ai_conversation_monitoring')",
+                                        "hint": "Gesamt über alle Monitoring-Läufe",
+                                        "html_template": "<div style=\"height:100%;display:flex;align-items:center;justify-content:center;font-size:3rem;font-weight:700;line-height:1;color:#2563eb\">[#~value#]</div>"
+                                    }
+                                ]
+                            },
+                            {
+                                "caption": "Unauffällige Conversations",
+                                "width": "34%",
+                                "widgets": [
+                                    {
+                                        "widget_type": "Html",
+                                        "object_alias": "exface.Core.exf_ai_conversation_monitoring",
+                                        "value": "=Lookup('unremarkable_conversations:SUM', 'exface.Core.exf_ai_conversation_monitoring')",
+                                        "hint": "Conversations ohne Finding",
+                                        "html_template": "<div style=\"height:100%;display:flex;align-items:center;justify-content:center;font-size:3rem;font-weight:700;line-height:1;color:#15803d\">[#~value#]</div>"
+                                    }
+                                ]
+                            },
+                            {
+                                "caption": "Auffällige Conversations",
+                                "width": "33%",
+                                "widgets": [
+                                    {
+                                        "widget_type": "Html",
+                                        "object_alias": "exface.Core.exf_ai_conversation_monitoring",
+                                        "value": "=Lookup('remarkable_conversations:SUM', 'exface.Core.exf_ai_conversation_monitoring')",
+                                        "hint": "Conversations mit mindestens einem Finding",
+                                        "html_template": "<div style=\"height:100%;display:flex;align-items:center;justify-content:center;font-size:3rem;font-weight:700;line-height:1;color:#ea580c\">[#~value#]</div>"
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
+                "height": "68%",
+                "widgets": [
+                    {
+                        "object_alias": "exface.Core.exf_ai_conversation_monitoring",
+                        "widget_type": "SplitVertical",
+                        "panels": [
+                            {
+                                "height": "42%",
+                                "caption": "Tagesfazit",
+                                "widgets": [
+                                    {
+                                        "id": "monitoring_summary_table",
+                                        "widget_type": "DataTable",
+                                        "object_alias": "exface.Core.exf_ai_conversation_monitoring",
+                                        "hide_header": true,
+                                        "select_single_result": true,
+                                        "columns": [
+                                            {
+                                                "attribute_alias": "monitoring_date",
+                                                "caption": "Monitoring-Tag",
+                                                "width": "125px"
+                                            },
+                                            {
+                                                "attribute_alias": "overall_conclusion",
+                                                "caption": "Zusammenfassung",
+                                                "nowrap": false
+                                            },
+                                            {
+                                                "attribute_alias": "analyzed_conversations",
+                                                "hidden": true
+                                            },
+                                            {
+                                                "attribute_alias": "unremarkable_conversations",
+                                                "hidden": true
+                                            },
+                                            {
+                                                "attribute_alias": "remarkable_conversations",
+                                                "hidden": true
+                                            }
+                                        ],
+                                        "filters": [
+                                            {
+                                                "attribute_alias": "monitoring_date",
+                                                "comparator": "==",
+                                                "value": "=monitoring_date_filter",
+                                                "apply_on_change": true,
+                                                "input_widget": {
+                                                    "widget_type": "InputHidden"
+                                                }
+                                            }
+                                        ],
+                                        "sorters": [
+                                            {
+                                                "attribute_alias": "monitoring_date",
+                                                "direction": "desc"
+                                            }
+                                        ],
+                                        "buttons": [
+                                            {
+                                                "action_alias": "exface.Core.ShowObjectEditDialog",
+                                                "caption": "Monitoring-Lauf öffnen",
+                                                "bind_to_double_click": true
+                                            }
+                                        ]
+                                    }
+                                ]
+                            },
+                            {
+                                "height": "58%",
+                                "widgets": [
+                                    {
+                                        "widget_type": "Tabs",
+                                        "object_alias": "exface.Core.exf_ai_conversation_monitoring_finding",
+                                        "tabs": [
+                                            {
+                                                "caption": "Auffälligkeiten",
+                                                "widgets": [
+                                                    {
+                                                        "widget_type": "DataTable",
+                                                        "object_alias": "exface.Core.exf_ai_conversation_monitoring_finding",
+                                                        "columns": [
+                                                            {
+                                                                "attribute_alias": "monitoring_oid__monitoring_date",
+                                                                "caption": "Monitoring-Tag",
+                                                                "width": "125px"
+                                                            },
+                                                            {
+                                                                "attribute_alias": "classification",
+                                                                "caption": "Priorität",
+                                                                "width": "100px",
+                                                                "cell_widget": {
+                                                                    "widget_type": "ColorIndicator",
+                                                                    "fill": true,
+                                                                    "color_only": false,
+                                                                    "color_scale": {
+                                                                        "GOOD": "~OK",
+                                                                        "INFO": "~INFO",
+                                                                        "LOW": "lightskyblue",
+                                                                        "MEDIUM": "~WARNING",
+                                                                        "HIGH": "darkorange",
+                                                                        "CRITICAL": "~ERROR"
+                                                                    }
+                                                                }
+                                                            },
+                                                            {
+                                                                "attribute_alias": "title",
+                                                                "caption": "Finding",
+                                                                "nowrap": false,
+                                                                "width": "30%"
+                                                            },
+                                                            {
+                                                                "attribute_alias": "description",
+                                                                "caption": "Details",
+                                                                "nowrap": false
+                                                            }
+                                                        ],
+                                                        "filters": [
+                                                            {
+                                                                "attribute_alias": "monitoring_oid__monitoring_date",
+                                                                "comparator": "==",
+                                                                "value": "=monitoring_date_filter",
+                                                                "apply_on_change": true,
+                                                                "input_widget": {
+                                                                    "widget_type": "InputHidden"
+                                                                }
+                                                            },
+                                                            {
+                                                                "attribute_alias": "classification",
+                                                                "caption": "Priorität"
+                                                            }
+                                                        ],
+                                                        "sorters": [
+                                                            {
+                                                                "attribute_alias": "monitoring_oid__monitoring_date",
+                                                                "direction": "desc"
+                                                            }
+                                                        ],
+                                                        "buttons": [
+                                                            {
+                                                                "action_alias": "exface.Core.ShowObjectEditDialog",
+                                                                "caption": "Finding öffnen",
+                                                                "bind_to_double_click": true
+                                                            }
+                                                        ]
+                                                    }
+                                                ]
+                                            },
+                                            {
+                                                "caption": "Ticketvorschläge",
+                                                "widgets": [
+                                                    {
+                                                        "widget_type": "DataTable",
+                                                        "object_alias": "exface.Core.exf_ai_conversation_monitoring_ticket_suggestion",
+                                                        "columns": [
+                                                            {
+                                                                "attribute_alias": "finding_oid__monitoring_oid__monitoring_date",
+                                                                "caption": "Monitoring-Tag",
+                                                                "width": "125px"
+                                                            },
+                                                            {
+                                                                "attribute_alias": "title",
+                                                                "caption": "Vorschlag",
+                                                                "nowrap": false,
+                                                                "width": "32%"
+                                                            },
+                                                            {
+                                                                "attribute_alias": "description",
+                                                                "caption": "Empfohlene Maßnahme",
+                                                                "nowrap": false
+                                                            }
+                                                        ],
+                                                        "filters": [
+                                                            {
+                                                                "attribute_alias": "finding_oid__monitoring_oid__monitoring_date",
+                                                                "comparator": "==",
+                                                                "value": "=monitoring_date_filter",
+                                                                "apply_on_change": true,
+                                                                "input_widget": {
+                                                                    "widget_type": "InputHidden"
+                                                                }
+                                                            }
+                                                        ],
+                                                        "sorters": [
+                                                            {
+                                                                "attribute_alias": "finding_oid__monitoring_oid__monitoring_date",
+                                                                "direction": "desc"
+                                                            }
+                                                        ],
+                                                        "buttons": [
+                                                            {
+                                                                "action_alias": "exface.Core.ShowObjectEditDialog",
+                                                                "caption": "Ticketvorschlag öffnen",
+                                                                "bind_to_double_click": true
+                                                            }
+                                                        ]
+                                                    }
+                                                ]
+                                            },
+                                            {
+                                                "caption": "Betroffene Conversations",
+                                                "widgets": [
+                                                    {
+                                                        "widget_type": "DataTable",
+                                                        "object_alias": "exface.Core.exf_ai_conversation_monitoring_finding_conversation",
+                                                        "columns": [
+                                                            {
+                                                                "attribute_alias": "finding_oid__monitoring_oid__monitoring_date",
+                                                                "caption": "Monitoring-Tag"
+                                                            },
+                                                            {
+                                                                "attribute_alias": "finding_oid__classification",
+                                                                "caption": "Priorität",
+                                                                "cell_widget": {
+                                                                    "widget_type": "ColorIndicator",
+                                                                    "fill": true,
+                                                                    "color_only": false,
+                                                                    "color_scale": {
+                                                                        "GOOD": "~OK",
+                                                                        "INFO": "~INFO",
+                                                                        "LOW": "lightskyblue",
+                                                                        "MEDIUM": "~WARNING",
+                                                                        "HIGH": "darkorange",
+                                                                        "CRITICAL": "~ERROR"
+                                                                    }
+                                                                }
+                                                            },
+                                                            {
+                                                                "attribute_alias": "finding_oid__title",
+                                                                "caption": "Finding",
+                                                                "nowrap": false
+                                                            },
+                                                            {
+                                                                "attribute_alias": "conversation_oid",
+                                                                "caption": "Conversation"
+                                                            }
+                                                        ],
+                                                        "filters": [
+                                                            {
+                                                                "attribute_alias": "finding_oid__monitoring_oid__monitoring_date",
+                                                                "comparator": "==",
+                                                                "value": "=monitoring_date_filter",
+                                                                "apply_on_change": true,
+                                                                "input_widget": {
+                                                                    "widget_type": "InputHidden"
+                                                                }
+                                                            },
+                                                            {
+                                                                "attribute_alias": "finding_oid__classification",
+                                                                "caption": "Priorität"
+                                                            }
+                                                        ],
+                                                        "sorters": [
+                                                            {
+                                                                "attribute_alias": "finding_oid__monitoring_oid__monitoring_date",
+                                                                "direction": "desc"
+                                                            }
+                                                        ],
+                                                        "buttons": [
+                                                            {
+                                                                "action_alias": "exface.Core.ShowObjectEditDialog",
+                                                                "caption": "Zuordnung öffnen",
+                                                                "bind_to_double_click": true
+                                                            }
+                                                        ]
+                                                    }
+                                                ]
+                                            },
+                                            {
+                                                "caption": "Monitoring-Läufe",
+                                                "widgets": [
+                                                    {
+                                                        "widget_type": "DataTable",
+                                                        "object_alias": "exface.Core.exf_ai_conversation_monitoring",
+                                                        "columns": [
+                                                            {
+                                                                "attribute_alias": "monitoring_date",
+                                                                "caption": "Monitoring-Tag"
+                                                            },
+                                                            {
+                                                                "attribute_alias": "analyzed_conversations",
+                                                                "caption": "Analysiert"
+                                                            },
+                                                            {
+                                                                "attribute_alias": "unremarkable_conversations",
+                                                                "caption": "Unauffällig"
+                                                            },
+                                                            {
+                                                                "attribute_alias": "remarkable_conversations",
+                                                                "caption": "Auffällig"
+                                                            },
+                                                            {
+                                                                "attribute_alias": "user_oid",
+                                                                "caption": "Ausgeführt von"
+                                                            },
+                                                            {
+                                                                "attribute_alias": "overall_conclusion",
+                                                                "caption": "Gesamtfazit",
+                                                                "nowrap": false
+                                                            }
+                                                        ],
+                                                        "filters": [
+                                                            {
+                                                                "attribute_alias": "monitoring_date",
+                                                                "comparator": "==",
+                                                                "value": "=monitoring_date_filter",
+                                                                "apply_on_change": true,
+                                                                "input_widget": {
+                                                                    "widget_type": "InputHidden"
+                                                                }
+                                                            }
+                                                        ],
+                                                        "sorters": [
+                                                            {
+                                                                "attribute_alias": "monitoring_date",
+                                                                "direction": "desc"
+                                                            }
+                                                        ],
+                                                        "buttons": [
+                                                            {
+                                                                "action_alias": "exface.Core.ShowObjectEditDialog",
+                                                                "caption": "Monitoring-Lauf öffnen",
+                                                                "bind_to_double_click": true
+                                                            }
+                                                        ]
+                                                    }
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            }
+        ]
+    }
+}
