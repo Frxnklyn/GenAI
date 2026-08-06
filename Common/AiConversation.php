@@ -874,4 +874,228 @@ class AiConversation implements AiConversationInterface
     {
         return $this->getMessagesByType(AiMessageTypeDataType::ERROR);
     }
+
+    /**
+     * Loads the raw LLM response message for the most recent tool-call request.
+     *
+     * The returned array is the complete assistant message object (including the
+     * `tool_calls` array) that was stored when the LLM originally called the tool.
+     * It is needed to reconstruct the correct OpenAI message sequence when resuming
+     * a conversation after a user confirmation.
+     *
+     * @return array|null The assistant message array, or null if none found.
+     */
+    public function loadLastToolCallRequestMessage(): ?array
+    {
+        $messageSheet = DataSheetFactory::createFromObjectIdOrAlias($this->workbench, 'axenox.GenAI.AI_MESSAGE');
+        $messageSheet->getColumns()->addFromExpression('DATA');
+        $messageSheet->getFilters()->addConditionFromString('AI_CONVERSATION', $this->getConversationId());
+        $messageSheet->getFilters()->addConditionFromString('ROLE', AiMessageTypeDataType::TOOLCALLING);
+        $messageSheet->getSorters()->addFromString('SEQUENCE_NUMBER', 'DESC');
+        $messageSheet->dataRead();
+
+        if ($messageSheet->isEmpty()) {
+            return null;
+        }
+
+        $dataJson = $messageSheet->getCellValue('DATA', 0);
+        if ($dataJson === null || $dataJson === '') {
+            return null;
+        }
+
+        $data = json_decode($dataJson, true);
+        return is_array($data) ? $data : null;
+    }
+
+    /**
+     * Persists a pending tool-call confirmation in the conversation log.
+     *
+     * The stored row uses ROLE = PENDING_CONFIRMATION so it can be queried back
+     * on the next request. Only one pending confirmation per conversation is
+     * expected at a time.
+     *
+     * @param string $toolName          Name of the tool that requested confirmation.
+     * @param string $callId            LLM-assigned call ID.
+     * @param array  $args              Original named arguments passed to the tool.
+     * @param string $question          Question that was displayed to the user.
+     * @param array  $priorToolMessages Already-executed tool results from the same LLM batch
+     *                                  (tools that ran before the confirmation one).
+     *                                  Each entry: ['tool_call_id'=>…, 'toolName'=>…, 'content'=>…]
+     * @param array  $remainingToolCalls Tool calls from the same batch that have NOT yet run.
+     *                                  Each entry: ['toolName'=>…, 'callId'=>…, 'args'=>…]
+     */
+    public function savePendingConfirmation(
+        string $toolName,
+        string $callId,
+        array $args,
+        string $question,
+        array $priorToolMessages = [],
+        array $remainingToolCalls = []
+    ): void {
+        $transaction = $this->workbench->data()->startTransaction();
+        $message = DataSheetFactory::createFromObjectIdOrAlias($this->workbench, 'axenox.GenAI.AI_MESSAGE');
+
+        try {
+            $data = json_encode([
+                'toolName'           => $toolName,
+                'callId'             => $callId,
+                'args'               => $args,
+                'question'           => $question,
+                'answered'           => false,
+                'priorToolMessages'  => $priorToolMessages,
+                'remainingToolCalls' => $remainingToolCalls,
+            ], JSON_UNESCAPED_UNICODE);
+
+            $message->addRow([
+                'AI_CONVERSATION'  => $this->getConversationId(),
+                'USER'             => $this->workbench->getSecurity()->getAuthenticatedUser()->getUid(),
+                'ROLE'             => AiMessageTypeDataType::PENDING_CONFIRMATION,
+                'MESSAGE'          => $question,
+                'DATA'             => $data,
+                'SEQUENCE_NUMBER'  => $this->sequenceNumber++,
+            ]);
+
+            $message->dataCreate(false, $transaction);
+            $transaction->commit();
+        } catch (\Throwable $e) {
+            $transaction->rollback();
+            $this->workbench->getLogger()->logException($e);
+        }
+    }
+
+    /**
+     * Loads the most recent pending confirmation for this conversation.
+     *
+     * Returns an associative array with keys `toolName`, `callId`, `args` and
+     * `question`, or `null` if no unanswered pending confirmation exists.
+     *
+     * @return array{toolName:string,callId:string,args:array,question:string}|null
+     */
+    public function loadPendingConfirmation(): ?array
+    {
+        $messageSheet = DataSheetFactory::createFromObjectIdOrAlias($this->workbench, 'axenox.GenAI.AI_MESSAGE');
+        $messageSheet->getColumns()->addFromExpression('DATA');
+        $messageSheet->getFilters()->addConditionFromString('AI_CONVERSATION', $this->getConversationId());
+        $messageSheet->getFilters()->addConditionFromString('ROLE', AiMessageTypeDataType::PENDING_CONFIRMATION);
+        $messageSheet->getSorters()->addFromString('SEQUENCE_NUMBER', 'DESC');
+        $messageSheet->dataRead();
+
+        if ($messageSheet->isEmpty()) {
+            return null;
+        }
+
+        $dataJson = $messageSheet->getCellValue('DATA', 0);
+        if ($dataJson === null || $dataJson === '') {
+            return null;
+        }
+
+        $data = json_decode($dataJson, true);
+        if (! is_array($data)) {
+            return null;
+        }
+
+        // Skip confirmations that have already been answered
+        if (! empty($data['answered'])) {
+            return null;
+        }
+
+        return $data;
+    }
+
+    /**
+     * Saves all tool results from a confirmation turn as a single TOOL message.
+     *
+     * Called during the confirmation resume with every tool result from the batch:
+     * - tools that already ran before the confirmation (prior)
+     * - the confirmation tool itself (executed or declined)
+     * - tools that ran after the confirmation (remaining)
+     *
+     * @param array $toolResults  Each entry: ['toolName'=>…, 'callId'=>…, 'result'=>…]
+     */
+    public function saveConfirmationToolResults(array $toolResults): void
+    {
+        if (empty($toolResults)) {
+            return;
+        }
+
+        $transaction = $this->workbench->data()->startTransaction();
+        $message = DataSheetFactory::createFromObjectIdOrAlias($this->workbench, 'axenox.GenAI.AI_MESSAGE');
+
+        $markdown = '> **' . count($toolResults) . "** tool result(s) after confirmation:\n\n";
+        foreach ($toolResults as $i => $tr) {
+            $no = $i + 1;
+            $markdown .= "\n## {$no}. {$tr['toolName']}()\n\n";
+            $markdown .= MarkdownDataType::escapeCodeBlock($tr['result']);
+        }
+
+        try {
+            $message->addRow([
+                'AI_CONVERSATION'  => $this->getConversationId(),
+                'USER'             => $this->workbench->getSecurity()->getAuthenticatedUser()->getUid(),
+                'ROLE'             => AiMessageTypeDataType::TOOL,
+                'MESSAGE'          => $markdown,
+                'DATA'             => json_encode($toolResults, JSON_UNESCAPED_UNICODE),
+                'SEQUENCE_NUMBER'  => $this->sequenceNumber++,
+            ]);
+            $message->dataCreate(false, $transaction);
+            $transaction->commit();
+        } catch (\Throwable $e) {
+            $transaction->rollback();
+            $this->workbench->getLogger()->logException($e);
+        }
+    }
+
+    /**
+     * Records the user's answer to the most recent pending confirmation.
+     *
+     * The existing PENDING_CONFIRMATION message is marked as answered (DATA field
+     * is updated with `answered: true` and the user's choice). The user's response
+     * is additionally stored as a separate USER message so the full request–answer
+     * pair is visible in the conversation log.
+     *
+     * TODO: consider a dedicated message type (e.g. PENDING_CONFIRMATION_ANSWER)
+     * instead of USER to better separate confirmation answers from real user input.
+     *
+     * @param bool $confirmed TRUE if the user clicked "Yes", FALSE for "No".
+     */
+    public function saveConfirmationAnswer(bool $confirmed): void
+    {
+        $transaction = $this->workbench->data()->startTransaction();
+
+        try {
+            // Mark the existing PENDING_CONFIRMATION record as answered
+            $messageSheet = DataSheetFactory::createFromObjectIdOrAlias($this->workbench, 'axenox.GenAI.AI_MESSAGE');
+            $messageSheet->getColumns()->addFromAttributeGroup($messageSheet->getMetaObject()->getAttributes());
+            $messageSheet->getFilters()->addConditionFromString('AI_CONVERSATION', $this->getConversationId());
+            $messageSheet->getFilters()->addConditionFromString('ROLE', AiMessageTypeDataType::PENDING_CONFIRMATION);
+            $messageSheet->getSorters()->addFromString('SEQUENCE_NUMBER', 'DESC');
+            $messageSheet->dataRead();
+
+            if (! $messageSheet->isEmpty()) {
+                $existingDataJson = $messageSheet->getCellValue('DATA', 0) ?? '{}';
+                $existingData = json_decode($existingDataJson, true) ?: [];
+                $existingData['answered'] = true;
+                $existingData['answer']   = $confirmed ? 'confirmed' : 'cancelled';
+                $messageSheet->setCellValue('DATA', 0, json_encode($existingData, JSON_UNESCAPED_UNICODE));
+                $messageSheet->dataUpdate(false, $transaction);
+            }
+
+            // TODO: consider a dedicated message type (e.g. PENDING_CONFIRMATION_ANSWER)
+            // instead of USER to better separate confirmation answers from real user input.
+            $answerSheet = DataSheetFactory::createFromObjectIdOrAlias($this->workbench, 'axenox.GenAI.AI_MESSAGE');
+            $answerSheet->addRow([
+                'AI_CONVERSATION'  => $this->getConversationId(),
+                'USER'             => $this->workbench->getSecurity()->getAuthenticatedUser()->getUid(),
+                'ROLE'             => AiMessageTypeDataType::USER,
+                'MESSAGE'          => $confirmed ? 'confirmed' : 'cancelled',
+                'SEQUENCE_NUMBER'  => $this->sequenceNumber++,
+            ]);
+            $answerSheet->dataCreate(false, $transaction);
+
+            $transaction->commit();
+        } catch (\Throwable $e) {
+            $transaction->rollback();
+            $this->workbench->getLogger()->logException($e);
+        }
+    }
 }

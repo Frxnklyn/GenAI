@@ -1,10 +1,13 @@
 <?php
 namespace axenox\GenAI\AI\Agents;
 
+use axenox\GenAI\AI\ResponseStatusMessages\AiResponseStatusMessageWithConfirmation;
 use axenox\GenAI\Common\AiResponse;
 use axenox\GenAI\Common\AiConversation;
 use axenox\GenAI\Common\AiToolCallResponse;
 use axenox\GenAI\Common\AiToolResultString;
+use axenox\GenAI\Factories\AiResponseStatusMessageFactory;
+use axenox\GenAI\Interfaces\AiToolConfirmationResultInterface;
 use axenox\GenAI\Common\DataQueries\OpenAiApiDataQuery;
 use axenox\GenAI\Exceptions\AiAgentNotFoundError;
 use axenox\GenAI\Exceptions\AiAgentRuntimeError;
@@ -123,6 +126,9 @@ class GenericAssistant implements AiAgentInterface
     /** @var AiResponseStatusMessageInterface[] */
     private array $toolStatusMessages = [];
 
+    /** True when handleToolCalls() was interrupted by a confirmation request. */
+    private bool $pendingConfirmation = false;
+
     private $promptSuggestions = [];
 
     /**
@@ -144,17 +150,25 @@ class GenericAssistant implements AiAgentInterface
     {
         // Reset tool-related state for this invocation
         $this->toolStatusMessages = [];
-        
+        $this->pendingConfirmation = false;
+
+        $userMsg = trim($prompt->getUserPrompt());
+        $isConfirmationToken = $userMsg === AiResponseStatusMessageWithConfirmation::CONFIRM_TOKEN
+            || $userMsg === AiResponseStatusMessageWithConfirmation::CANCEL_TOKEN;
+
         // Initialize the data query
         $query = new OpenAiApiDataQuery($this->workbench);
         if (null !== $conversationId = $prompt->getConversationUid()) {
             $query->setConversationUid($conversationId);
         }
-        // Add the user prompt. Do it before initializing the conversation - if it is a new conversation, the user
-        // prompt will be used as title.
-        $query->appendMessage($prompt->getUserPrompt());
-        $query->setFiles($prompt->getFiles());
-        
+
+        // For normal requests, add the user prompt BEFORE getConversation so that
+        // new conversations can use it as the conversation title.
+        if (! $isConfirmationToken) {
+            $query->appendMessage($prompt->getUserPrompt());
+            $query->setFiles($prompt->getFiles());
+        }
+
         // Initialize the conversation
         $conversation = $this->getConversation($prompt, $query);
         if ($conversationId === null) {
@@ -162,56 +176,158 @@ class GenericAssistant implements AiAgentInterface
             $prompt->setConversationUid($conversationId);
         }
 
-        // Render system prompt
+        // For confirmation tokens, check whether there is actually a pending action.
+        // If none is found (e.g. stale click) fall through to the normal path.
+        $pending = $isConfirmationToken ? $conversation->loadPendingConfirmation() : null;
+        $isResumingToolCall = $pending !== null;
+
+        // Render system prompt (same for both paths)
         try {
             $systemPrompt = $this->getSystemPrompt($prompt);
             $query->setSystemPrompt($systemPrompt);
         } catch (\Throwable $e) {
             $e = new AiPromptError($this, $prompt, 'Failed to render AI prompt. ' . $e->getMessage(), null, $e);
             throw $conversation->saveError($e, $this->getTools(), $this->getResponseJsonSchema());
-            /* TODO handle different errors differently
-            $this->workbench->getLogger()->logException($e);
-            return $this->createResponseUnavailable('Error contacting the assistant', $prompt, $e);
-            */
         }
 
-        // Add JSON schema
-        if($this->hasResponseJsonSchema()) {
+        // Add JSON schema (same for both paths)
+        if ($this->hasResponseJsonSchema()) {
             $query->setResponseJsonSchema($this->getResponseJsonSchema());
             if ($val = $this->getResponseAnswerPath()) {
                 $query->setResponseAnswerPath($val);
             }
         }
-        
-        // Add tools
+
+        // Add tools (same for both paths)
         foreach ($this->getTools() as $tool) {
             $query->addTool($tool);
         }
 
-        // Now save the conversation messages for system and user prompts including all their metadata metadata
-        try {
-            $conversation->saveSystemPrompt($query, $systemPrompt, $this->getTools(), $this->getResponseJsonSchema());
-            $conversation->saveUserPrompt($query);
-        } catch (\Throwable $e) {
-            $e = new AiPromptError($this, $prompt, 'Failed to save AI conversation. ' . $e->getMessage(), null, $e);
-            throw $conversation->saveError($e, $this->getTools(), $this->getResponseJsonSchema());
+        if ($isResumingToolCall) {
+            // ── CONFIRMATION PATH ────────────────────────────────────────────────
+            // Accept:  re-invoke the tool with __confirmed = true, pass its result.
+            // Decline: pass "user declined" text – the LLM decides how to respond.
+            // Both paths are symmetric from here on.
+            $confirmed = $userMsg === AiResponseStatusMessageWithConfirmation::CONFIRM_TOKEN;
+
+            [$toolResultText, $confirmMsgs] = $this->resolveConfirmationResult($prompt, $pending, $confirmed);
+            foreach ($confirmMsgs as $msg) {
+                $this->toolStatusMessages[] = $msg;
+            }
+
+            // Execute remaining tool calls from the original batch (those that came
+            // after the confirmation tool and were stored in the pending record).
+            $remainingResults = [];
+            foreach ($pending['remainingToolCalls'] ?? [] as $remaining) {
+                try {
+                    $remainingTool   = $this->getTool($remaining['toolName']);
+                    $remainingResult = $remainingTool->invoke($this, $prompt, $remaining['args']);
+                    $remainingText   = $remainingResult->getValue();
+                    foreach ($remainingResult->getStatusMessages() as $msg) {
+                        $this->toolStatusMessages[] = $msg;
+                    }
+                } catch (\Throwable $e) {
+                    $remainingText = 'ERROR: ' . $e->getMessage();
+                    $this->toolStatusMessages[] = AiResponseStatusMessageFactory::createErrorMessage($e->getMessage());
+                }
+                $remainingResults[] = [
+                    'toolName' => $remaining['toolName'],
+                    'callId'   => $remaining['callId'],
+                    'result'   => $remainingText,
+                ];
+            }
+
+            // Save ALL tool results (prior + confirmed/declined + remaining) to the
+            // conversation log so the full batch is visible in the admin view.
+            $allToolResults = [];
+            foreach ($pending['priorToolMessages'] ?? [] as $prior) {
+                $allToolResults[] = [
+                    'toolName' => $prior['toolName'] ?? 'unknown',
+                    'callId'   => $prior['tool_call_id'],
+                    'result'   => $prior['content'],
+                ];
+            }
+            $allToolResults[] = [
+                'toolName' => $pending['toolName'],
+                'callId'   => $pending['callId'],
+                'result'   => $toolResultText,
+            ];
+            foreach ($remainingResults as $rem) {
+                $allToolResults[] = $rem;
+            }
+            $conversation->saveConfirmationToolResults($allToolResults);
+
+            // Reconstruct the original tool-call sequence so the LLM receives the
+            // complete context: [history] + [assistant tool-call] + [all results].
+            $requestMessage = $conversation->loadLastToolCallRequestMessage();
+            if ($requestMessage !== null) {
+                $query->appendAssistantMessage($requestMessage);
+                foreach ($pending['priorToolMessages'] ?? [] as $prior) {
+                    $query->appendSingleToolResult($prior['content'], $prior['tool_call_id']);
+                }
+                $query->appendSingleToolResult($toolResultText, $pending['callId']);
+                foreach ($remainingResults as $rem) {
+                    $query->appendSingleToolResult($rem['result'], $rem['callId']);
+                }
+            }
+
+            // Query the LLM BEFORE saving the confirmation answer so that the
+            // "confirmed / cancelled" USER message written by saveConfirmationAnswer
+            // is not yet in the DB when getConversationData() lazily loads the
+            // conversation history inside the connector.
+            try {
+                $performedQuery = $this->getConnection()->query($query);
+            } catch (\Throwable $e) {
+                $conversation->saveConfirmationAnswer($confirmed); // always mark answered
+                $e = new AiPromptError($this, $prompt, 'Failed to query LLM. ' . $e->getMessage(), null, $e);
+                throw $conversation->saveError($e, $this->getTools(), $this->getResponseJsonSchema());
+            }
+            $conversation->saveConfirmationAnswer($confirmed);
+
+        } else {
+            // ── NORMAL PATH ──────────────────────────────────────────────────────
+            // If a confirmation token arrived but the pending record is gone (stale
+            // button click), treat the message as a regular user input.
+            if ($isConfirmationToken) {
+                $query->appendMessage($userMsg);
+                $query->setFiles($prompt->getFiles());
+            }
+
+            try {
+                $conversation->saveSystemPrompt($query, $systemPrompt, $this->getTools(), $this->getResponseJsonSchema());
+                $conversation->saveUserPrompt($query);
+            } catch (\Throwable $e) {
+                $e = new AiPromptError($this, $prompt, 'Failed to save AI conversation. ' . $e->getMessage(), null, $e);
+                throw $conversation->saveError($e, $this->getTools(), $this->getResponseJsonSchema());
+            }
+
+            try {
+                $performedQuery = $this->getConnection()->query($query);
+            } catch (\Throwable $e) {
+                $e = new AiPromptError($this, $prompt, 'Failed to query LLM. ' . $e->getMessage(), null, $e);
+                throw $conversation->saveError($e, $this->getTools(), $this->getResponseJsonSchema());
+            }
         }
 
-        try {
-            $performedQuery = $this->getConnection()->query($query);
-        } catch (\Throwable $e){
-            $e = new AiPromptError($this, $prompt, 'Failed to query LLM. ' . $e->getMessage(), null, $e);
-            throw $conversation->saveError($e, $this->getTools(), $this->getResponseJsonSchema());
-        }
-        
+        // ── SHARED EXECUTION PATH (Accept, Decline, and normal all end up here) ─
         try {
             $performedQuery = $this->handleToolCalls($prompt, $performedQuery, $conversation);
-        } catch (\Throwable $e){
+        } catch (\Throwable $e) {
             if (! $e instanceof AiToolRuntimeError) {
                 $e = new AiPromptError($this, $prompt, 'Failed to call AI tools. ' . $e->getMessage(), null, $e);
             }
             throw $conversation->saveError($e, $this->getTools(), $this->getResponseJsonSchema());
         }
+
+        // If a tool requested confirmation, return the dialog and wait.
+        if ($this->pendingConfirmation) {
+            $response = new AiResponse($prompt, '', $conversation->getConversationId());
+            foreach ($this->toolStatusMessages as $statusMessage) {
+                $response->addStatusMessage($statusMessage);
+            }
+            return $response;
+        }
+
         try {
             $conversation->saveResponse(
                 $performedQuery,
@@ -223,6 +339,45 @@ class GenericAssistant implements AiAgentInterface
             $e = new AiPromptError($this, $prompt, 'Failed to process AI response. ' . $e->getMessage(), null, $e);
             throw $conversation->saveError($e, $this->getTools(), $this->getResponseJsonSchema());
         }
+    }
+
+    /**
+     * Resolves the tool result for a confirmation response.
+     *
+     * Accept: re-invokes the tool with `__confirmed = true`.
+     * Decline: returns a fixed "user declined" text — the LLM decides the reply.
+     *
+     * Returns [$toolResultText, $statusMessages[]].
+     *
+     * @param AiPromptInterface $prompt
+     * @param array             $pending  Pending confirmation data from the DB.
+     * @param bool              $confirmed TRUE when the user clicked "Yes".
+     * @return array{0: string, 1: AiResponseStatusMessageInterface[]}
+     */
+    protected function resolveConfirmationResult(
+        AiPromptInterface $prompt,
+        array $pending,
+        bool $confirmed
+    ): array {
+        if ($confirmed) {
+            try {
+                $tool = $this->getTool($pending['toolName']);
+                $args = $pending['args'];
+                $args['__confirmed'] = true;
+                $result = $tool->invoke($this, $prompt, $args);
+                return [$result->getValue(), $result->getStatusMessages()];
+            } catch (\Throwable $e) {
+                return [
+                    'ERROR: ' . $e->getMessage(),
+                    [AiResponseStatusMessageFactory::createErrorMessage($e->getMessage())],
+                ];
+            }
+        }
+
+        return [
+            'The user declined to execute the action.',
+            [AiResponseStatusMessageFactory::createInfoMessage('Action cancelled.')],
+        ];
     }
 
     /**
@@ -263,6 +418,7 @@ class GenericAssistant implements AiAgentInterface
 
             $requestedCalls = $performedQuery->getToolCalls();
             $existingCall = false;
+            $pendingConfirmationDetected = false;
 
             foreach($requestedCalls as $call){
                 $resultOfTool = null;
@@ -272,6 +428,53 @@ class GenericAssistant implements AiAgentInterface
                     $resultOfTool = null;
                     try {
                         $resultOfTool = $tool->invoke($this, $prompt, $args);
+
+                        // Confirmation requested – save the pending state and break out
+                        // of both the foreach and the while loop without querying the LLM.
+                        if ($resultOfTool instanceof AiToolConfirmationResultInterface) {
+                            // Collect results of tools that already ran in this batch (before the confirmation one)
+                            $priorToolMessages = [];
+                            foreach ($toolCallResponses ?? [] as $priorCallId => $tcr) {
+                                $priorToolMessages[] = [
+                                    'tool_call_id' => $priorCallId,
+                                    'toolName'     => $tcr->getToolName(),
+                                    'content'      => $tcr->getToolResult()->getValue(),
+                                ];
+                            }
+
+                            // Collect tool calls that come AFTER the confirmation one (not yet executed)
+                            $remainingToolCalls = [];
+                            $foundConfirmation  = false;
+                            foreach ($requestedCalls as $otherCall) {
+                                if ($otherCall->getCallId() === $call->getCallId()) {
+                                    $foundConfirmation = true;
+                                    continue;
+                                }
+                                if ($foundConfirmation) {
+                                    $remainingToolCalls[] = [
+                                        'toolName' => $otherCall->getToolName(),
+                                        'callId'   => $otherCall->getCallId(),
+                                        'args'     => $otherCall->getArguments(),
+                                    ];
+                                }
+                            }
+
+                            $conversation->savePendingConfirmation(
+                                $call->getToolName(),
+                                $call->getCallId(),
+                                $call->getArguments(), // named args for the re-invoke
+                                $resultOfTool->getConfirmationQuestion(),
+                                $priorToolMessages,
+                                $remainingToolCalls
+                            );
+                            $this->toolStatusMessages[] = new AiResponseStatusMessageWithConfirmation(
+                                $resultOfTool->getConfirmationQuestion()
+                            );
+                            $this->pendingConfirmation   = true;
+                            $pendingConfirmationDetected = true;
+                            break;
+                        }
+
                         $exceptions = $resultOfTool->getExceptions();
                         // Collect status messages from the tool result
                         foreach ($resultOfTool->getStatusMessages() as $statusMsg) {
@@ -315,6 +518,9 @@ class GenericAssistant implements AiAgentInterface
 
                 $performedQuery->appendToolMessages($existingCall, $resultOfTool, $callId, $performedQuery->getResponseMessage());
                 $existingCall = true;
+            }
+            if ($pendingConfirmationDetected) {
+                break; // Exit the while loop – no further LLM call for this turn
             }
             $toolCallResponses = $conversation->saveToolResponses($performedQuery, $toolCallResponses);
             // $toolCallResponses = null;

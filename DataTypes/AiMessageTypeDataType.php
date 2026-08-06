@@ -26,6 +26,7 @@ class AiMessageTypeDataType extends StringDataType implements EnumDataTypeInterf
     const TOOLCALLING = "tool calling";
     const WARNING = "warning";
     const ERROR = "error";
+    const PENDING_CONFIRMATION = "pending_confirmation";
     
     /**
      * 
@@ -42,7 +43,8 @@ class AiMessageTypeDataType extends StringDataType implements EnumDataTypeInterf
             self::TOOL => 'Tool result',
             self::TOOLCALLING => 'Tool call',
             self::WARNING => 'Warning',
-            self::ERROR => 'Error'
+            self::ERROR => 'Error',
+            self::PENDING_CONFIRMATION => 'Pending confirmation',
         ];
     }
 }

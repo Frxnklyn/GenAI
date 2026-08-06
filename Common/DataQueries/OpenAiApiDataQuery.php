@@ -74,7 +74,14 @@ class OpenAiApiDataQuery extends AbstractDataQuery implements AiQueryInterface
         }
         if ($includeConversation === true) {
             foreach ($this->getConversationData()->getRows() as $row) {
-                if(!in_array($row['ROLE'] ,[AiMessageTypeDataType::SYSTEM, AiMessageTypeDataType::TOOL, AiMessageTypeDataType::TOOLCALLING, AiMessageTypeDataType::WARNING, AiMessageTypeDataType::ERROR]))
+                if(!in_array($row['ROLE'] ,[
+                    AiMessageTypeDataType::SYSTEM,
+                    AiMessageTypeDataType::TOOL,
+                    AiMessageTypeDataType::TOOLCALLING,
+                    AiMessageTypeDataType::WARNING,
+                    AiMessageTypeDataType::ERROR,
+                    AiMessageTypeDataType::PENDING_CONFIRMATION, // internal state – not a valid LLM role
+                ]))
                     $messages[] = ['content' => $row['MESSAGE'], 'role' => $row['ROLE']];
             }
         }
@@ -91,6 +98,34 @@ class OpenAiApiDataQuery extends AbstractDataQuery implements AiQueryInterface
     public function appendMessage(string $content, string $role = AiMessageTypeDataType::USER) : OpenAiApiDataQuery
     {
         $this->messages[] = ['content' => $content, 'role' => $role];
+        return $this;
+    }
+
+    /**
+     * Appends only the assistant tool-call request message without any tool result.
+     *
+     * Used when reconstructing a confirmation turn so that prior and remaining
+     * tool results can be added individually via appendSingleToolResult().
+     */
+    public function appendAssistantMessage(array $message): OpenAiApiDataQuery
+    {
+        $this->messages[] = $message;
+        return $this;
+    }
+
+    /**
+     * Appends a single tool result message (role = "tool") for the given call ID.
+     *
+     * Used to inject individual tool results when resuming a multi-tool batch
+     * that was interrupted by a confirmation request.
+     */
+    public function appendSingleToolResult(string $content, string $callId): OpenAiApiDataQuery
+    {
+        $this->messages[] = [
+            'tool_call_id' => $callId,
+            'content'      => $content,
+            'role'         => AiMessageTypeDataType::TOOL,
+        ];
         return $this;
     }
 
