@@ -141,31 +141,10 @@ class ImportAgent extends GenericAssistant
             ? 'Imported ' . $rowCount . ' row(s) into "' . $objectAlias . '"'
             : 'Prepared ' . $rowCount . ' unsaved row(s) for "' . $objectAlias . '".';
 
-        // Falls nicht auf einer Seite ausgelöst, nur einfache Nachricht
-        if (! $prompt->isTriggeredOnPage()) {
-            return $wasSaved
-                ? AiResponseStatusMessageFactory::createOkMessage($text)
-                : AiResponseStatusMessageFactory::createInfoMessage($text);
-        }
-
-        $contextWidget = $prompt->getWidgetTriggeredBy();
-        if ($wasSaved) {
-            return AiResponseStatusMessageFactory::createDataSheetMessage(
-                $text,
-                $sheet,
-                $contextWidget,
-                AiResponseStatusMessageFactory::DATA_SHEET_WIDGET_PREVIEW
-            );
-        }
-
-        if (! $wasSaved) {
-            return AiResponseStatusMessageFactory::createDataSheetMessage(
-                $text,
-                $sheet,
-                $contextWidget,
-                AiResponseStatusMessageFactory::DATA_SHEET_WIDGET_CREATE
-            );
-        }
+        // TODO: Use createDataSheetMessage() to show the result in a pop-up dialog widget - not yet supported
+        return $wasSaved
+            ? AiResponseStatusMessageFactory::createOkMessage($text)
+            : AiResponseStatusMessageFactory::createInfoMessage($text);
     }
     
     protected function dataSave(UxonObject $uxon, ?DataSheetSchema $dataSheetSchema = null) : DataSheetInterface

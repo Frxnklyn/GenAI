@@ -124,21 +124,10 @@ class DataSheetImportTool extends AbstractAiTool
             ? 'Imported ' . $rowCount . ' row(s) into "' . $objectAlias . '".'
             : 'Prepared ' . $rowCount . ' unsaved row(s) for "' . $objectAlias . '".';
 
-        if (! $prompt->isTriggeredOnPage()) {
-            return $this->autoSave
-                ? AiResponseStatusMessageFactory::createOkMessage($text)
-                : AiResponseStatusMessageFactory::createInfoMessage($text);
-        }
-
-        $contextWidget = $prompt->getWidgetTriggeredBy();
-        return AiResponseStatusMessageFactory::createDataSheetMessage(
-            $text,
-            $sheet,
-            $contextWidget,
-            $this->autoSave
-                ? AiResponseStatusMessageFactory::DATA_SHEET_WIDGET_PREVIEW
-                : AiResponseStatusMessageFactory::DATA_SHEET_WIDGET_REVIEW
-        );
+        // TODO: Use createDataSheetMessage() to show the result in a pop-up dialog widget - not yet supported
+        return $this->autoSave
+            ? AiResponseStatusMessageFactory::createOkMessage($text)
+            : AiResponseStatusMessageFactory::createInfoMessage($text);
     }
 
     /**
