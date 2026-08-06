@@ -58,7 +58,12 @@ class AiResponseStatusMessageFactory extends AbstractStaticFactory
 	}
 
 	/**
+	 * TODO Make that widget action registration works for all widget types, currently not working for AiChat
+	 * Widgets\AIChat.php
+	 * 
 	 * Creates a status message with a standard DataSheet dialog.
+	 * 
+	 * 
 	 */
 	public static function createDataSheetMessage(
 		string $text,
