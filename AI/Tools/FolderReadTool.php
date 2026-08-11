@@ -16,13 +16,13 @@ use exface\Core\Interfaces\DataTypes\DataTypeInterface;
 use exface\Core\Interfaces\WorkbenchInterface;
 
 /**
- * This AI tool allows an LLM to list files and folders in a directory.
- *
+ * List files and folders in a directory up to a certain depth.
+ * 
  * Use this tool to inspect folder contents in a controlled scope using
  * `base_path`, `use_vendor_folder_as_base` and `allowed_paths`.
- *
+ * 
  * ## Example configuration in an assistant
- *
+ * 
  * ```
  *  {
  *      "instructions": "You summarize project structure",
@@ -38,19 +38,16 @@ use exface\Core\Interfaces\WorkbenchInterface;
  *              "arguments": [
  *                  {
  *                      "name": "path",
- *                      "description": "Path to a folder relative to the vendor folder",
- *                      "data_type": {
- *                          "alias": "exface.Core.String"
- *                      }
+ *                      "description": "Path to a folder relative to the vendor folder"
  *                  }
  *              ]
  *          }
  *      }
  *  }
- *
+ * 
  * ```
  */
-class ReadFolderTool extends AbstractAiTool
+class FolderReadTool extends AbstractAiTool
 {
     use FileAccessToolTrait;
 
@@ -58,6 +55,9 @@ class ReadFolderTool extends AbstractAiTool
 
     /** @var int */
     private int $depth = 0;
+
+    /** @var bool */
+    private bool $excludeDotPaths = true;
 
     /**
      * {@inheritDoc}
@@ -108,6 +108,33 @@ class ReadFolderTool extends AbstractAiTool
     }
 
     /**
+     * {@inheritDoc}
+     * @see \axenox\GenAI\Interfaces\AiToolInterface::getRules()
+     */
+    public function getRules(): ?string
+    {
+        $rules = [];
+        $rules[] = 'Read folder paths relative to the configured base path: ' . $this->getBasePathDescription() . '.';
+        $rules[] = 'Never pass absolute paths. Pass only the folder path argument expected by this tool.';
+
+        $allowedPaths = $this->getAllowedPathPatterns();
+        if ($allowedPaths !== []) {
+            $rules[] = 'Allowed folder paths must match one of these patterns:';
+            foreach ($allowedPaths as $pattern) {
+                $rules[] = '- `' . $pattern . '`';
+            }
+        } else {
+            $rules[] = 'No additional allowed-path pattern is configured; stay within the configured base path.';
+        }
+
+        $rules[] = $this->getDepth() === 0
+            ? 'The folder listing is recursive without a configured depth limit.'
+            : 'The folder listing includes children up to depth ' . $this->getDepth() . '.';
+
+        return implode("\n", $rules);
+    }
+
+    /**
      * Maximum recursive depth for folder listing.
      *
      * Depth `1` lists direct children only. Higher values include deeper levels. Depth `0` includes all children
@@ -118,11 +145,32 @@ class ReadFolderTool extends AbstractAiTool
      * @uxon-default 0
      *
      * @param int $value
-     * @return ReadFolderTool
+     * @return FolderReadTool
      */
-    protected function setDepth(int $value): ReadFolderTool
+    protected function setDepth(int $value): FolderReadTool
     {
         $this->depth = max(0, $value);
+        return $this;
+    }
+
+    protected function getDepth(): int
+    {
+        return $this->depth;
+    }
+
+    /**
+     * Set to FALSE to list files and folders whose names start with a dot - e.g. `.git`.
+     *
+     * @uxon-property exclude_dot_paths
+     * @uxon-type boolean
+     * @uxon-default true
+     *
+     * @param bool $value
+     * @return FolderReadTool
+     */
+    protected function setExcludeDotPaths(bool $value): FolderReadTool
+    {
+        $this->excludeDotPaths = $value;
         return $this;
     }
 
@@ -154,6 +202,18 @@ class ReadFolderTool extends AbstractAiTool
                 }
             )
         );
+
+        if ($this->excludeDotPaths) {
+            $items = array_values(
+                array_filter(
+                    $items,
+                    static function (string $name): bool
+                    {
+                        return $name === '' || $name[0] !== '.';
+                    }
+                )
+            );
+        }
         natcasesort($items);
 
         $markdown = '';

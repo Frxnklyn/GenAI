@@ -34,9 +34,23 @@ interface AiAgentInterface extends iCanBeConvertedToUxon, AliasInterface, iCanGe
     public function getTool(string $name) : AiToolInterface;
 
     /**
+     * @return AiToolInterface[]
+     */
+    public function getTools() : array;
+
+    /**
      * Returns the UxonObject containing the concepts
      *
      * @return array UxonObject
      */
     public function getRawConcepts() : ?UxonObject;
+
+    /**
+     * Returns the fully rendered instructions (system prompt) for the given prompt,
+     * with all concepts resolved.
+     *
+     * @param AiPromptInterface $prompt
+     * @return string
+     */
+    public function getSystemPrompt(AiPromptInterface $prompt) : string;
 }

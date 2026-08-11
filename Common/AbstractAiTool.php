@@ -56,8 +56,12 @@ abstract class AbstractAiTool implements AiToolInterface
     {
         $argTemplates = static::getArgumentsTemplates($this->getWorkbench());
         foreach ($arrayOfServiceParams as $i => $uxon) {
-            $argParam = $argTemplates[$i];
-            $argParam->importUxonObject($uxon);
+            $argParam = $argTemplates[$i] ?? null;
+            if ($argParam !== null) {
+                $argParam->importUxonObject($uxon);
+            } else {
+                $argParam = new ServiceParameter($this, $uxon);
+            }
             $this->arguments[] = $argParam;
         }
         return $this;
@@ -122,7 +126,7 @@ abstract class AbstractAiTool implements AiToolInterface
      * 
      * @return string
      */
-    public function getDescription() : string
+    public function getDescription() : ?string
     {
         return $this->description;
     }
@@ -298,12 +302,28 @@ abstract class AbstractAiTool implements AiToolInterface
     {
         $argsModels = [];
         foreach (static::getArgumentsTemplates($workbench) as $param) {
-            $argsModels[] = $param->exportUxonObject()->toArray();
+            $argModel = [
+                'name' => $param->getName(),
+                'description' => $param->getDescription()
+            ];
+            if ($param->hasExamples()) {
+                $argModel['examples'] = $param->getExamples();
+            }
+            $argsModels[] = $argModel;
         }
         return [
             'alias' => AiFactory::findToolAlias(new AiToolSelector($workbench, static::class)),
             'description' => '',
             'arguments' => $argsModels,
         ];
+    }
+
+    /**
+     * {@inheritDoc}
+     * @see AiToolInterface::getRules()
+     */
+    public function getRules() : ?string
+    {
+        return null;
     }
 }

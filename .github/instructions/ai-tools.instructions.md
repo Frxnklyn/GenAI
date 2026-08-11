@@ -1,3 +1,8 @@
+---
+description: "Use when working on AI tools"
+name: "AI tools"
+applyTo: "AI/Tools/*.php"
+---
 # AI tools
 
 ## Summary
@@ -56,6 +61,13 @@ The main methods to implement are:
 - `getArgumentsTemplates()`, which returns the generic JSON schema for all 
   possible arguments. This is supposed to be refined in every agent using 
   the tool.
+- `getRules()` if the tool has configured boundaries or workflow rules that
+  the LLM must see at runtime. Rules should be derived from the current tool
+  configuration where possible, for example base folders, allowed path
+  patterns, scopes, security checks or configured limits. Keep the tool
+  description focused on what the tool is for; put usage constraints and
+  must-follow behavior into rules so concepts such as tool introductions can
+  render them separately.
 
 ## Error and warning handling in tools
 
@@ -90,6 +102,14 @@ Recommended pattern:
 
 AI tool prototypes can be implemented in any app and should be placed in the 
 `AI/Tools` folder for easy autodiscovery. 
+
+## Documentation maintenance
+
+- Whenever a tool prototype is added, changed, renamed, or removed, update the tool documentation in `Docs/AI/Tools/index.md` in the same change.
+- Keep the English `Docs/AI/Tools/index.md` and German `Docs/AI/Tools/index_german.md` versions synchronized. Every content or navigation change must be applied to both language versions in the same change.
+- Keep the documented purpose, use cases, unsuitable use cases, configuration, arguments, result, limitations, alias, and UXON prototype link consistent with the implementation.
+- Changes to shared tool behavior or configuration, such as `AbstractAiTool` or `FileAccessToolTrait`, must also be reflected in every affected tool section.
+- Tools provided by other apps must be documented in the owning app. The GenAI documentation only lists prototypes supplied by `axenox.GenAI` and states that further tools can exist in other apps.
 
 ## Global rules
 

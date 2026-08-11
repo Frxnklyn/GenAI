@@ -2,7 +2,7 @@
     "uid": "0x11f1961d41c5a824961d025041000001",
     "alias_with_namespace": "axenox.genai.chat",
     "menu_parent_page_selector": "0x11efb71bcc0c07e2b71b025041000001",
-    "menu_index": 2,
+    "menu_index": 3,
     "menu_visible": true,
     "name": "Chat",
     "description": "Chat with any agent",
@@ -11,7 +11,7 @@
     "created_by_user_selector": "0x31000000000000000000000000000000",
     "created_on": "2026-03-16 18:33:33",
     "modified_by_user_selector": "0x31000000000000000000000000000000",
-    "modified_on": "2026-06-03 12:14:27",
+    "modified_on": "2026-06-30 01:53:46",
     "contents": {
         "widget_type": "SplitHorizontal",
         "object_alias": "axenox.GenAI.AI_AGENT",
@@ -104,6 +104,9 @@
                                             },
                                             {
                                                 "action_alias": "exface.Core.ShowObjectCopyDialog"
+                                            },
+                                            {
+                                                "action_alias": "axenox.GenAI.AiAgentVersionChangeConnectionDialog"
                                             },
                                             {
                                                 "action_alias": "exface.Core.DeleteObject",
@@ -235,6 +238,7 @@
                         "widget_type": "axenox.GenAI.AIChat",
                         "object_alias": "exface.Core.DUMMY",
                         "agent_alias": "axenox.GenAI.workbench_ai_assistant",
+                        "upload_enabled": true,
                         "live_references": [
                             {
                                 "widget_link": "=agents_table!ALIAS_WITH_VERSION",

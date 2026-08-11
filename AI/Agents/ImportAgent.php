@@ -2,6 +2,7 @@
 namespace axenox\GenAI\AI\Agents;
 
 use axenox\GenAI\Common\DataSheetSchema;
+use axenox\GenAI\Exceptions\AiPromptError;
 use axenox\GenAI\Interfaces\AiResponseInterface;
 use exface\Core\CommonLogic\UxonObject;
 use exface\Core\Exceptions\RuntimeException;
@@ -81,6 +82,10 @@ class ImportAgent extends GenericAssistant
     private string $readyToSaveSchemaDescription = 'Indicates whether the AI considers the data complete enough to be saved.';
 
     private bool $showMessageOnly = true;
+
+    private bool $allowEmptyData = true;
+
+    private bool $warnOnEmptyData = true;
     
     public function handle(AiPromptInterface $prompt) : AiResponseInterface
     {
@@ -91,22 +96,37 @@ class ImportAgent extends GenericAssistant
         $this->setResponseJsonSchema(new UxonObject($jsonSchema));
 
         $response = parent::handle($prompt);
-        // Since $json complies with our JSON schema, we know that at least the data payload is valid.
-        $json = $response->getJson();
-        $payload = $json['data'] ?? $json;
 
-        $this->readyToSave = (bool) ($json['ready_to_save'] ?? false);
-        
-        $importedSheet = $this->dataSave(UxonObject::fromAnything($payload));
-        $response->setData($importedSheet);
+        try {
+            // Since $json complies with our JSON schema, we know that at least the data payload is valid.
+            $json = $response->getJson();
 
-        if($this->willSaveData()){
-            $response->addOKStatusMessage('Data saved successfully.');
-        }else{
-            $response->addErrorStatusMessage('Data not saved.');
+            if (! array_key_exists('data', $json) || $this->isImportPayloadEmpty($json['data'])) {
+                return $this->handleMissingImportData($prompt, $response);
+            }
+
+            $payload = $json['data'];
+
+            $this->readyToSave = (bool) ($json['ready_to_save'] ?? false);
+
+            $importedSheet = $this->dataSave(UxonObject::fromAnything($payload));
+            $response->setData($importedSheet);
+
+            if ($this->willSaveData()) {
+                $response->addOKStatusMessage('Data saved successfully.');
+            } else {
+                $warning = new AiPromptError($this, $prompt, 'Data import completed, but data was not saved.');
+                $this->getConversation($prompt)->saveWarnings([$warning]);
+                $response->addErrorStatusMessage('Data not saved.');
+            }
+
+            return $response;
+        } catch (\Throwable $e) {
+            $this->getConversation($prompt)->saveError(
+                new AiPromptError($this, $prompt, 'Failed to import AI data. ' . $e->getMessage(), null, $e)
+            );
+            throw $e;
         }
-        
-        return $response;
     }
     
     protected function dataSave(UxonObject $uxon, ?DataSheetSchema $dataSheetSchema = null) : DataSheetInterface
@@ -525,6 +545,61 @@ class ImportAgent extends GenericAssistant
     {
         $this->showMessageOnly = $trueOrFalse;
         return $this;
+    }
+
+    /**
+     * If `true`, missing `$.data` in the AI response does not throw an exception.
+     *
+     * @uxon-property allow_empty_data
+     * @uxon-type bool
+     * @uxon-default true
+     */
+    protected function setAllowEmptyData(bool $trueOrFalse) : ImportAgent
+    {
+        $this->allowEmptyData = $trueOrFalse;
+        return $this;
+    }
+
+    /**
+     * If `true`, a warning is logged when no import data was generated.
+     *
+     * @uxon-property warn_on_empty_data
+     * @uxon-type bool
+     * @uxon-default true
+     */
+    protected function setWarnOnEmptyData(bool $trueOrFalse) : ImportAgent
+    {
+        $this->warnOnEmptyData = $trueOrFalse;
+        return $this;
+    }
+
+    protected function handleMissingImportData(AiPromptInterface $prompt, AiResponseInterface $response) : AiResponseInterface
+    {
+        if (! $this->allowEmptyData) {
+            throw new RuntimeException('AI response does not contain import data at $.data.');
+        }
+
+        if (! $this->warnOnEmptyData) {
+            return $response;
+        }
+
+        $warning = new AiPromptError($this, $prompt, 'AI response did not contain import data. Nothing to import.');
+        $this->getConversation($prompt)->saveWarning([$warning]);
+        $response->addErrorStatusMessage('No data generated.');
+        return $response;
+    }
+
+    protected function isImportPayloadEmpty($payload) : bool
+    {
+        if ($payload === null) {
+            return true;
+        }
+
+        if (is_array($payload)) {
+            return empty($payload);
+        }
+
+        return false;
     }
 
 

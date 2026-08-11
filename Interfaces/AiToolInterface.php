@@ -40,12 +40,22 @@ interface AiToolInterface extends iCanBeConvertedToUxon, WorkbenchDependantInter
 
     /**
      * 
-     * @return string
+     * @return string|null
      */
-    public function getDescription() : string;
+    public function getDescription() : ?string;
 
     /**
      * @return DataTypeInterface
      */
     public function getReturnDataType() : DataTypeInterface;
+
+    /**
+     * Returns important rules the LLM must know to use this tool.
+     *
+     * These rules will always be included in the tool description even if not explicitly added by the designer of
+     * the agent.
+     *
+     * @return string|null
+     */
+    public function getRules() : ?string;
 }

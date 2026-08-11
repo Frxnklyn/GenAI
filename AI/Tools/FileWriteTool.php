@@ -9,28 +9,27 @@ use axenox\GenAI\Interfaces\AiAgentInterface;
 use axenox\GenAI\Interfaces\AiPromptInterface;
 use axenox\GenAI\Interfaces\AiToolResultInterface;
 use exface\Core\CommonLogic\Actions\ServiceParameter;
-use exface\Core\DataTypes\FilePathDataType;
 use exface\Core\DataTypes\StringDataType;
 use exface\Core\Factories\DataTypeFactory;
 use exface\Core\Interfaces\DataTypes\DataTypeInterface;
 use exface\Core\Interfaces\WorkbenchInterface;
 
 /**
- * This AI tool allows an LLM to read a file from selected folders.
+ * This AI tool allows an LLM create/overwrite a file in selected folders.
  * 
  * ## Example configuration in an assistant
  * 
  * ```
  *  {
- *      "instructions": "You summarize markdown files",
+ *      "instructions": "You help write Markdown documentation",
  *      "tools": {
- *          "read_file": {
- *              "alias": "axenox.GenAI.ReadFileTool",
- *              "description": "Read a Markdown file",
+ *          "write_file": {
+ *              "alias": "axenox.GenAI.WriteFileTool",
+ *              "description": "Create/overwrite a Markdown file",
  *              "use_vendor_folder_as_base": true,
  *              "allowed_paths": [
  *                  "axenox/*.md",
- *                  "exface/*.md"
+ *                  "exface/*.md",
  *              ],
  *              "arguments": [
  *                  {
@@ -39,41 +38,27 @@ use exface\Core\Interfaces\WorkbenchInterface;
  *                      "data_type": {
  *                          "alias": "exface.Core.String"
  *                      }
- *                  }
+ *                  }, {
+ *                       "name": "content",
+ *                       "description": "Text content to write into the target file",
+ *                       "data_type": {
+ *                           "alias": "exface.Core.String"
+ *                       }
+ *                   }
  *              ]
  *          }
  *      }
  *  }
  * 
  * ```
- * 
- * ## Support for common AI instruction formats
- * 
- * This tool can include applicable AI instructions stored in the neighborhood of the requested file. For example, when
- * reading files from an app, the `.github` folder can be scanned for applicable instructions. Other formats like 
- * `Agents.md` will follow in the future.
- * 
- * ### Github Copilot instructions
- * 
- * Set `include_instructions_for_github_copilot` to `true` to include capplicable Copilot instructions markdown in
- * addition to the file contents, if `.github/instructions/*.instructions.md` files are found in the file hierarchy 
- * above the requested file.
- * 
- * If multiple files are requested (e.g. multiple tool calls), instructions applicable to multiple files will be included
- * only once.
- * 
- * Copilot instructions will be appended to the file contents:
- * 
- * ```
- * <requested_file>
- * 
- * ```
  */
-class ReadFileTool extends AbstractAiTool
+class FileWriteTool extends AbstractAiTool
 {
     use FileAccessToolTrait;
 
     public const ARG_PATH = 'path';
+
+    public const ARG_CONTENT = 'content';
 
     /**
      * {@inheritDoc}
@@ -82,23 +67,18 @@ class ReadFileTool extends AbstractAiTool
     public function invoke(AiAgentInterface $agent, AiPromptInterface $prompt, array $arguments): AiToolResultInterface
     {
         $relativePath = (string) ($arguments[0] ?? '');
+        $content = (string) ($arguments[1] ?? '');
         $basePath = $this->getBasePathAbsolute();
         $absolutePath = $this->getPathAbsolute($relativePath, $basePath, $prompt);
 
-        if (! is_file($absolutePath)) {
-            throw new AiToolRuntimeError($this, $prompt, 'Invalid path: target file does not exist.');
+        try {
+            $this->getWorkbench()->filemanager()->dumpFile($absolutePath, $content);
+        } catch (\Throwable $e) {
+            throw new AiToolRuntimeError($this, $prompt, 'Failed to write file: ' . $relativePath . '. ' . $e->getMessage(), null, $e);
         }
-
-        if (! is_readable($absolutePath)) {
-            throw new AiToolRuntimeError($this, $prompt, 'Access denied: target file is not readable.');
-        }
-
-        $content = file_get_contents($absolutePath);
-        if ($content === false) {
-            throw new AiToolRuntimeError($this, $prompt, 'Failed to read file: ' . $relativePath);
-        }
-
-        return new AiToolResultString($this, $arguments, $content, $this->getReturnDataType());
+        
+        $message = 'File saved: ' . $relativePath;
+        return new AiToolResultString($this, $arguments, $message, $this->getReturnDataType());
     }
 
     /**
@@ -112,6 +92,9 @@ class ReadFileTool extends AbstractAiTool
             (new ServiceParameter($self))
                 ->setName(self::ARG_PATH)
                 ->setDescription('Path to the file relative to the configured base path.'),
+            (new ServiceParameter($self))
+                ->setName(self::ARG_CONTENT)
+                ->setDescription('Text content to write into the target file.'),
         ];
     }
 

@@ -1,7 +1,7 @@
-# GenAI connector
+# GenAI
 
-- [AI chat facade](AI_chat_facade/index.md)
-    - [Testing with Bruno API client](AI_chat_facade/Testing_with_Bruno.md)
-- Widget `axenox.GenAI.AIChat`
-- [Testing](AI_Testing/index.md)
-  - enthählt Informationen darüber wie man Metriken angibt und allgemein Test Cases ausfüllt und automatisch durchlaufen lässt
+[Deutsch](index_german.md)
+
+The `axenox.GenAI` app provides the framework for configuring, running, testing, and continuously improving AI agents in ExFace applications.
+
+[Find all information about AI here.](AI/index.md)
