@@ -79,6 +79,10 @@ class DataSheetImportTool extends AbstractAiTool
                 $sheet = DataSheetFactory::createFromUxon($this->getWorkbench(), $uxon);
                 $sheet->dataSave();
                 $messages[] = 'Imported ' . count($sheet->getRows()) . ' row(s) into "' . $sheet->getMetaObject()->getAliasWithNamespace() . '".';
+            } else {
+                $sheet = DataSheetFactory::createFromUxon($this->getWorkbench(), $uxon);
+                $sheet->dataSave();
+                $messages[] = 'Imported ' . count($sheet->getRows()) . ' row(s) into "' . $sheet->getMetaObject()->getAliasWithNamespace() . '".';
             }
 
             if(count($messages) === 0){

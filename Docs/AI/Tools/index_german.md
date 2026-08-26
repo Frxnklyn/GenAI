@@ -17,8 +17,10 @@ Verwenden Sie ein Tool für Informationen, die zu detailliert, zu veränderlich 
 | Eine Datei erstellen oder vollständig ersetzen | `FileWriteTool` |
 | Einen streng kontrollierten lokalen Befehl ausführen | `CommandLineTool` |
 | ExFace-Objektdaten lesen oder speichern | `DataSheetReadTool` oder `DataSheetImportTool` |
+| Suchen, wo Modell-Elemente referenziert sind | `ModelSearchTool` |
 | ExFace-Dokumentation lesen | `GetDocsTool` |
 | Modell- oder UXON-Metadaten untersuchen | Eines der `Model*InfoTool`-Tools |
+| Menü und Bildschirme einer App verstehen | `UiOverviewTool` |
 | Eine konkrete Seiten- oder Widget-Instanz untersuchen | `UiWidgetInfoTool` |
 | Deterministische Testausgaben bereitstellen | `MockTool` |
 
@@ -238,6 +240,20 @@ replacement text
 
 **Ergebnis und Grenzen.** Das Ergebnis enthält JSON-formatierte Zeilen und Metadaten in Markdown. Es gelten die üblichen ExFace-Objektberechtigungen und DataSheet-Lesebeschränkungen. Ungültige Objektaliasse, Ausdrücke oder Filter führen zu Fehlern.
 
+**Konfiguration.** Das Tool stellt drei UXON-Eigenschaften zur Steuerung von Format und Kontext bereit:
+
+| UXON-Eigenschaft | Typ | Standard | Beschreibung |
+| --- | --- | --- | --- |
+| `output_mode` | enum | `markdown_table` | Einer von `markdown_table`, `markdown` oder `json`. |
+| `header_level` | integer | `2` | Markdown-Überschriftenebene für die Abschnittsüberschriften, zulässiger Bereich 1-6. Ungültige Werte erzeugen eine Warnung und fallen auf `2` zurück. |
+| `include_object_description` | boolean | `true` bei `markdown_table`, sonst `false` | Fügt nach den Daten einen kurzen Objektbeschreibungsblock hinzu, sofern verfügbar. |
+
+**Ausgabemodi.** Das Tool unterstützt drei Renderings: `markdown_table` (Standard), `markdown` und `json`. `markdown_table` eignet sich am besten für Mehrzeilergebnisse. `markdown` wechselt auf eine Datensatz-für-Datensatz-Zusammenfassung für leere, einzeilige oder breite Ergebnisse, wenn eine kompakte Tabelle keine klare Darstellung mehr ist.
+
+**Rückgabewert.** Das Tool liefert einen String, der durch `renderOutput()` erzeugt wird. Die Ausgabe beginnt immer mit einem kurzen Satz wie `Read data of object ...`, gefolgt vom gewählten Payload (`markdown_table`, `markdown` oder `json`) und optional einem Objektbeschreibungsblock, wenn das aktiviert ist.
+
+**Warnungen und behebbar Fehler.** Nicht unterstützte oder ungültige Konfigurationen werden als Warnungen behandelt, nicht als harte Fehler. Das Tool fällt auf den sicheren Standardwert zurück und setzt die Antwort fort. Leere Ergebnismengen erzeugen ebenfalls eine Warnung; das Rendern der Objektbeschreibung wird bei Fehlern abgefangen und als Warnung geloggt, ohne das Tool-Ergebnis zu brechen.
+
 ## `DataSheetImportTool`
 
 **Alias:** `axenox.GenAI.DataSheetImportTool` | [UXON-Prototyp](api/docs/exface/Core/Docs/UXON/UXON_prototypes.md?selector=%5Caxenox%5CGenAI%5CAI%5CTools%5CDataSheetImportTool)
@@ -452,6 +468,29 @@ Beispielinhalt für `import_user_with_object_alias(...)` in `data_sheet`:
 
 **Ergebnis und Grenzen.** Exakte Treffer werden zuerst ausgegeben, gefolgt von erzeugtem Markdown für jeden Treffer. Allgemeine Begriffe können mehrere Objekte zurückgeben; verwenden Sie daher den spezifischsten bekannten Selektor.
 
+## `ModelSearchTool`
+
+**Alias:** `axenox.GenAI.ModelSearchTool` | [UXON-Prototyp](api/docs/exface/Core/Docs/UXON/UXON_prototypes.md?selector=%5Caxenox%5CGenAI%5CAI%5CTools%5CModelSearchTool)
+
+**Zweck.** Durchsucht das ExFace-Metamodell nach Verwendungsstellen und Referenzen über das vordefinierte Objekt `exface.Core.SEARCH_RESULT`.
+
+**Verwenden, wenn.** Der Agent herausfinden soll, wo ein Objektalias, Aktionsalias, Seitenalias oder ein anderer Modellbegriff in Model-UXON verwendet wird.
+
+**Nicht verwenden, wenn.** Verwenden Sie das Tool nicht für allgemeine Business-Datenabfragen. Nutzen Sie `DataSheetReadTool`, wenn Sie ein frei konfigurierbares Objekt oder abweichende Spalten benötigen.
+
+| Argument | Erforderlich | Beschreibung |
+| --- | --- | --- |
+| `search_query` | Ja | Suchbegriff für die Modellsuche. |
+| `object_type` | Nein | Optionaler Typfilter wie `exf_object`, `exf_attribute`, `exf_page` oder `exf_object_action`. |
+| `rows_limit` | Nein | Optionale maximale Zeilenanzahl. Standard ist `50`. |
+| `rows_offset` | Nein | Optionaler Pagination-Offset. Standard ist `0`. |
+
+**Verwendung.** Das Tool kapselt `DataSheetReadTool` und setzt `object_alias`, Spalten und den UXON-Suchfilter bereits vordefiniert. Sie übergeben nur den Suchbegriff und optional einschränkende Argumente.
+
+**So sieht es aus.** Die KI gibt einen Suchbegriff ein, zum Beispiel `search_query = "\"exface.Core.USER\""`, und bekommt dazu passende Verwendungs-Trefferzeilen zurück.
+
+**Ergebnis und Grenzen.** Das Ergebnis wird wie bei `DataSheetReadTool` als Markdown zurückgegeben und enthält Treffer mit Kontextfeldern wie Objektname, Instanzname und Instanzalias.
+
 ## `ModelComponentInfoTool`
 
 **Alias:** `axenox.GenAI.ModelComponentInfoTool` | [UXON-Prototyp](api/docs/exface/Core/Docs/UXON/UXON_prototypes.md?selector=%5Caxenox%5CGenAI%5CAI%5CTools%5CModelComponentInfoTool)
@@ -506,6 +545,25 @@ Beispielinhalt für `import_user_with_object_alias(...)` in `data_sheet`:
 **Verwendung.** Das Modell übergibt den PHP-Dateipfad des Widgets oder einen unterstützten Core-Widget-Typ. Ein Dateipfad ist der eindeutigste Selektor.
 
 **Ergebnis und Grenzen.** Das Tool kombiniert indizierte UXON-Annotationen mit Metadaten zu Widget-Funktionen und Presets. Fehlende oder unvollständige Modellannotationen führen zu unvollständiger Dokumentation.
+
+## `UiOverviewTool`
+
+**Alias:** `axenox.GenAI.UiOverviewTool` | [UXON-Prototyp](api/docs/exface/Core/Docs/UXON/UXON_prototypes.md?selector=%5Caxenox%5CGenAI%5CAI%5CTools%5CUiOverviewTool)
+
+**Zweck.** Erzeugt eine Markdown-Übersicht des Hauptmenüs der Plattform sowie der Bildschirme einer bestimmten App. Das Hauptmenü wird vollständig mit einem Seiten-Link zu jedem Eintrag aufgelistet, während die Seiten der betreffenden App und die von ihnen erreichbaren Dialoge ausführlich beschrieben werden.
+
+**Verwenden, wenn.** Der Agent verstehen muss, welche Bildschirme eine App anbietet, was ein Benutzer dort tun kann und wie er zu weiteren Seiten navigiert. Die Seiten-Links im Menü können an `UiWidgetInfoTool` übergeben werden, um Details zu untersuchen.
+
+**Nicht verwenden, wenn.** Um das UXON einer einzelnen, bereits bekannten Seite oder eines Dialogs zu untersuchen, verwenden Sie `UiWidgetInfoTool` direkt.
+
+| Argument | Erforderlich | Beschreibung |
+| --- | --- | --- |
+| `app` | Ja | Alias der App, deren Seiten ausführlich beschrieben werden (zum Beispiel `exface.Core`). |
+| `depth` | Nein | Wie tief Dialoge verfolgt werden, die über Schaltflächen innerhalb der Seiten der App geöffnet werden. Standardwert `10`. |
+
+**Verwendung.** Das Modell übergibt den App-Alias und optional eine Rekursionstiefe. Das Menü wird auf dieselbe Weise wie beim `NavMenu`-Widget aufgebaut, beginnend bei der Standard-Startseite des Servers.
+
+**Ergebnis und Grenzen.** Jedes Bildschirm-Kapitel listet die auf dem Bildschirm gezeigten Metaobjekte sowie alle für den Benutzer verfügbaren Schaltflächen auf. Dialoge werden rekursiv dokumentiert, bis das Tiefenbudget erschöpft ist; nur im Menü sichtbare Seiten erscheinen in der Übersicht.
 
 ## `UiWidgetInfoTool`
 

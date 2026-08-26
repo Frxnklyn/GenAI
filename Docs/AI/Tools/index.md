@@ -19,8 +19,10 @@ Use a tool for information that is too detailed, too volatile, or too expensive 
 | Read or save ExFace object data | `DataSheetReadTool` or `DataSheetImportTool` |
 | Read ExFace documentation | `GetDocsTool` |
 | Inspect model or UXON metadata | One of the `Model*InfoTool` tools |
+| Understand the menu and screens of an app | `UiOverviewTool` |
 | Inspect a concrete page or widget instance | `UiWidgetInfoTool` |
 | Provide deterministic test output | `MockTool` |
+| Search where model entities are referenced | `ModelSearchTool` |
 
 ## Common configuration
 
@@ -238,6 +240,20 @@ replacement text
 
 **Result and limits.** The result contains JSON-formatted rows and metadata in Markdown. Normal ExFace object permissions and DataSheet read restrictions apply. Invalid object aliases, expressions, or filters produce errors.
 
+**Configuration.** The tool exposes three UXON properties that control formatting and context:
+
+| UXON property | Type | Default | Description |
+| --- | --- | --- | --- |
+| `output_mode` | enum | `markdown_table` | One of `markdown_table`, `markdown`, or `json`. |
+| `header_level` | integer | `2` | Markdown heading level used for section headers, allowed range 1-6. Invalid values trigger a warning and fall back to `2`. |
+| `include_object_description` | boolean | `true` for `markdown_table`, else `false` | Adds a short object description block after the rendered data if available. |
+
+**Output modes.** The tool supports three renderings: `markdown_table` (default), `markdown`, and `json`. `markdown_table` is best for multi-row result sets. `markdown` switches to a record-by-record summary for empty, single-row, or wide results, where a compact table is not the clearest representation.
+
+**Return value.** The tool returns a string result created by `renderOutput()`. The final output always starts with a brief sentence such as `Read data of object ...`, followed by the selected payload (`markdown_table`, `markdown`, or `json`), and then optionally appends the object description block if enabled.
+
+**Warnings and recoverable issues.** Unsupported or invalid configuration values are treated as warnings rather than fatal errors. The tool falls back to the safe default and keeps the response running. Empty result sets also produce a warning, while failed object-description rendering is swallowed and logged as a warning without breaking the tool result.
+
 ## `DataSheetImportTool`
 
 **Alias:** `axenox.GenAI.DataSheetImportTool` | [UXON prototype](api/docs/exface/Core/Docs/UXON/UXON_prototypes.md?selector=%5Caxenox%5CGenAI%5CAI%5CTools%5CDataSheetImportTool)
@@ -452,6 +468,29 @@ Example content for `import_user_with_object_alias(...)` in `data_sheet`:
 
 **Result and limits.** Exact matches are returned first, followed by generated Markdown for every match. Broad terms may return several objects, so use the most specific known selector.
 
+## `ModelSearchTool`
+
+**Alias:** `axenox.GenAI.ModelSearchTool` | [UXON prototype](api/docs/exface/Core/Docs/UXON/UXON_prototypes.md?selector=%5Caxenox%5CGenAI%5CAI%5CTools%5CModelSearchTool)
+
+**Purpose.** Searches the ExFace metamodel for references and usage locations using the predefined object `exface.Core.SEARCH_RESULT`.
+
+**Use when.** The agent needs to find where an object alias, action alias, page alias, or another model term is referenced inside model UXON.
+
+**Do not use when.** Do not use it for generic business data retrieval. Use `DataSheetReadTool` when you need custom object access or custom columns beyond model-search defaults.
+
+| Argument | Required | Description |
+| --- | --- | --- |
+| `search_query` | Yes | Search term for the model search. |
+| `object_type` | No | Optional type filter such as `exf_object`, `exf_attribute`, `exf_page`, or `exf_object_action`. |
+| `rows_limit` | No | Optional maximum row count. Defaults to `50`. |
+| `rows_offset` | No | Optional pagination offset. Defaults to `0`. |
+
+**How to use.** The tool wraps `DataSheetReadTool` and predefines `object_alias`, columns, and the UXON search filter. You only provide the search term and optional narrowing arguments.
+
+**What it looks like.** The AI enters a search term, for example `search_query = "\"exface.Core.USER\""`, and receives matching usage rows.
+
+**Result and limits.** The result is rendered like `DataSheetReadTool` output and includes matched model entities with usage context fields such as object name, instance name, and instance alias.
+
 ## `ModelComponentInfoTool`
 
 **Alias:** `axenox.GenAI.ModelComponentInfoTool` | [UXON prototype](api/docs/exface/Core/Docs/UXON/UXON_prototypes.md?selector=%5Caxenox%5CGenAI%5CAI%5CTools%5CModelComponentInfoTool)
@@ -506,6 +545,25 @@ Example content for `import_user_with_object_alias(...)` in `data_sheet`:
 **How to use.** The model supplies the widget PHP file path or a supported core widget type. A file path is the most explicit selector.
 
 **Result and limits.** The tool combines indexed UXON annotations with widget-function and preset metadata. Missing or incomplete model annotations lead to incomplete documentation.
+
+## `UiOverviewTool`
+
+**Alias:** `axenox.GenAI.UiOverviewTool` | [UXON prototype](api/docs/exface/Core/Docs/UXON/UXON_prototypes.md?selector=%5Caxenox%5CGenAI%5CAI%5CTools%5CUiOverviewTool)
+
+**Purpose.** Produces a Markdown overview of the platform's main menu and of the screens of a given app. The main menu is listed completely with a page link for every entry, while the pages of the app of interest and the dialogs reachable from them are described in detail.
+
+**Use when.** The agent needs to understand which screens an app offers, what a user can do on them, and how to navigate to further pages. The page links in the menu can be passed to `UiWidgetInfoTool` for deeper inspection.
+
+**Do not use when.** To inspect the UXON of a single, already known page or dialog, use `UiWidgetInfoTool` directly.
+
+| Argument | Required | Description |
+| --- | --- | --- |
+| `app` | Yes | Alias of the app whose pages are described in detail (for example `exface.Core`). |
+| `depth` | No | How deep to follow dialogs opened by buttons inside the app's pages. Defaults to `10`. |
+
+**How to use.** The model supplies the app alias and optionally a recursion depth. The menu is built the same way as the `NavMenu` widget, starting from the default server root page.
+
+**Result and limits.** Each screen chapter lists the meta objects shown on the screen and all buttons available to the user. Dialogs are documented recursively until the depth budget is exhausted; only menu-visible pages appear in the overview.
 
 ## `UiWidgetInfoTool`
 
