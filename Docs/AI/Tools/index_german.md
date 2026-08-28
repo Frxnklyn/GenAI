@@ -240,15 +240,25 @@ replacement text
 
 **Ergebnis und Grenzen.** Das Ergebnis enthält JSON-formatierte Zeilen und Metadaten in Markdown. Es gelten die üblichen ExFace-Objektberechtigungen und DataSheet-Lesebeschränkungen. Ungültige Objektaliasse, Ausdrücke oder Filter führen zu Fehlern.
 
-**Konfiguration.** Das Tool stellt drei UXON-Eigenschaften zur Steuerung von Format und Kontext bereit:
+**Konfiguration.** Das Tool stellt vier UXON-Eigenschaften zur Steuerung von Format und Kontext bereit:
 
 | UXON-Eigenschaft | Typ | Standard | Beschreibung |
 | --- | --- | --- | --- |
 | `output_mode` | enum | `markdown_table` | Einer von `markdown_table`, `markdown` oder `json`. |
 | `header_level` | integer | `2` | Markdown-Überschriftenebene für die Abschnittsüberschriften, zulässiger Bereich 1-6. Ungültige Werte erzeugen eine Warnung und fallen auf `2` zurück. |
 | `include_object_description` | boolean | `true` bei `markdown_table`, sonst `false` | Fügt nach den Daten einen kurzen Objektbeschreibungsblock hinzu, sofern verfügbar. |
+| `markdown_row_template` | string | keiner | Optionales Template, das im Modus `markdown` einmal pro Datenzeile gerendert wird. Platzhalter der Form `[#~row:ATTRIBUT#]` liefern Zeilenwerte. |
 
-**Ausgabemodi.** Das Tool unterstützt drei Renderings: `markdown_table` (Standard), `markdown` und `json`. `markdown_table` eignet sich am besten für Mehrzeilergebnisse. `markdown` wechselt auf eine Datensatz-für-Datensatz-Zusammenfassung für leere, einzeilige oder breite Ergebnisse, wenn eine kompakte Tabelle keine klare Darstellung mehr ist.
+**Ausgabemodi.** Das Tool unterstützt drei Renderings: `markdown_table` (Standard), `markdown` und `json`. `markdown_table` eignet sich am besten für Mehrzeilergebnisse. `markdown` wechselt auf eine Datensatz-für-Datensatz-Zusammenfassung für leere, einzeilige oder breite Ergebnisse, wenn eine kompakte Tabelle keine klare Darstellung mehr ist. Ohne Zeilen-Template wird jeder Feldname als Listeneintrag ausgegeben. Sein Wert steht in der Folgezeile; danach folgt eine Leerzeile.
+
+**Markdown-Zeilen-Template.** `markdown_row_template` ersetzt im Modus `markdown` das automatisch erzeugte Datensatzlayout. Es verwendet dieselbe Bracket-Hash-Platzhaltersyntax wie Agent-Concepts und wird einmal pro Ergebniszeile gerendert:
+
+```json
+{
+  "output_mode": "markdown",
+  "markdown_row_template": "### [#~row:NAME#]\n\n- **Status**:\n  [#~row:STATUS#]"
+}
+```
 
 **Rückgabewert.** Das Tool liefert einen String, der durch `renderOutput()` erzeugt wird. Die Ausgabe beginnt immer mit einem kurzen Satz wie `Read data of object ...`, gefolgt vom gewählten Payload (`markdown_table`, `markdown` oder `json`) und optional einem Objektbeschreibungsblock, wenn das aktiviert ist.
 

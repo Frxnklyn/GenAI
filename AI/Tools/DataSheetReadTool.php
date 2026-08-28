@@ -19,6 +19,8 @@ use exface\Core\Factories\DataTypeFactory;
 use exface\Core\Interfaces\DataSheets\DataSheetInterface;
 use exface\Core\Interfaces\DataTypes\DataTypeInterface;
 use exface\Core\Interfaces\WorkbenchInterface;
+use exface\Core\Templates\BracketHashStringTemplateRenderer;
+use exface\Core\Templates\Placeholders\DataRowPlaceholders;
 
 /**
  * This AI tool allows an LLM to read data from any metaobject using DataSheets.
@@ -224,6 +226,7 @@ class DataSheetReadTool extends AbstractAiTool
     private $outputMode = self::OUTPUT_MARKDOWN_TABLE;
     private $headerLevel = 2;
     private $includeObjectDescription = null;
+    private ?string $markdownRowTemplate = null;
     private array $warnings = [];
 
     /**
@@ -280,6 +283,24 @@ class DataSheetReadTool extends AbstractAiTool
     protected function setIncludeObjectDescription(bool $includeObjectDescription)
     {
         $this->includeObjectDescription = $includeObjectDescription;
+        return $this;
+    }
+
+    /**
+     * Template rendered once for each data row in markdown output mode.
+     *
+     * Use `[#~row:ATTRIBUTE#]` placeholders to insert values from the current row.
+     *
+     * @uxon-property markdown_row_template
+     * @uxon-type string
+     * @uxon-template ### [#~row:NAME#]\n\n- **Status**:\n  [#~row:STATUS#]
+     *
+     * @param string $template
+     * @return $this
+     */
+    protected function setMarkdownRowTemplate(string $template)
+    {
+        $this->markdownRowTemplate = $template;
         return $this;
     }
 
@@ -458,12 +479,24 @@ MD;
 
         $header = MarkdownDataType::buildMarkdownHeader('Data', $this->headerLevel);
 
+        if ($this->markdownRowTemplate !== null) {
+            $renderedRows = [];
+            foreach (array_keys($rows) as $rowNumber) {
+                $renderer = new BracketHashStringTemplateRenderer($this->getWorkbench());
+                $renderer->addPlaceholder(new DataRowPlaceholders($dataSheet, $rowNumber, '~row:'));
+                $renderedRows[] = trim($renderer->render($this->markdownRowTemplate));
+            }
+            return $header . "\n\n" . implode("\n\n", $renderedRows);
+        }
+
         if (count($rows) === 1) {
             $lines = [$header];
             $lines[] = '';
             foreach ($columns as $columnName) {
                 $value = $rows[0][$columnName] ?? null;
-                $lines[] = '- **' . $columnName . '**: ' . $this->formatMarkdownValue($value);
+                $lines[] = '- **' . $columnName . '**:';
+                $lines[] = '  ' . $this->formatMarkdownValue($value);
+                $lines[] = '';
             }
             return implode("\n", $lines);
         }
@@ -478,11 +511,13 @@ MD;
                 $title = 'Entry ' . ($index + 1);
             }
             $sections[] = MarkdownDataType::buildMarkdownHeader($title, $entryLevel);
+            $sections[] = '';
             foreach ($columns as $columnName) {
                 $value = $row[$columnName] ?? null;
-                $sections[] = '- **' . $columnName . '**: ' . $this->formatMarkdownValue($value);
+                $sections[] = '- **' . $columnName . '**:';
+                $sections[] = '  ' . $this->formatMarkdownValue($value);
+                $sections[] = '';
             }
-            $sections[] = '';
         }
 
         return implode("\n", $sections);

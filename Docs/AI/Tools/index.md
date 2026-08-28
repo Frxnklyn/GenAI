@@ -240,15 +240,25 @@ replacement text
 
 **Result and limits.** The result contains JSON-formatted rows and metadata in Markdown. Normal ExFace object permissions and DataSheet read restrictions apply. Invalid object aliases, expressions, or filters produce errors.
 
-**Configuration.** The tool exposes three UXON properties that control formatting and context:
+**Configuration.** The tool exposes four UXON properties that control formatting and context:
 
 | UXON property | Type | Default | Description |
 | --- | --- | --- | --- |
 | `output_mode` | enum | `markdown_table` | One of `markdown_table`, `markdown`, or `json`. |
 | `header_level` | integer | `2` | Markdown heading level used for section headers, allowed range 1-6. Invalid values trigger a warning and fall back to `2`. |
 | `include_object_description` | boolean | `true` for `markdown_table`, else `false` | Adds a short object description block after the rendered data if available. |
+| `markdown_row_template` | string | none | Optional template rendered once per data row in `markdown` mode. Use `[#~row:ATTRIBUTE#]` placeholders for row values. |
 
-**Output modes.** The tool supports three renderings: `markdown_table` (default), `markdown`, and `json`. `markdown_table` is best for multi-row result sets. `markdown` switches to a record-by-record summary for empty, single-row, or wide results, where a compact table is not the clearest representation.
+**Output modes.** The tool supports three renderings: `markdown_table` (default), `markdown`, and `json`. `markdown_table` is best for multi-row result sets. `markdown` switches to a record-by-record summary for empty, single-row, or wide results, where a compact table is not the clearest representation. Without a row template, each field name is rendered as a list item and its value is placed on the following line, followed by a blank line.
+
+**Markdown row template.** `markdown_row_template` replaces the automatically generated record layout in `markdown` mode. It uses the same bracket-hash placeholder style as agent concepts and is rendered once per result row:
+
+```json
+{
+  "output_mode": "markdown",
+  "markdown_row_template": "### [#~row:NAME#]\n\n- **Status**:\n  [#~row:STATUS#]"
+}
+```
 
 **Return value.** The tool returns a string result created by `renderOutput()`. The final output always starts with a brief sentence such as `Read data of object ...`, followed by the selected payload (`markdown_table`, `markdown`, or `json`), and then optionally appends the object description block if enabled.
 
