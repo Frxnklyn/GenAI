@@ -16,11 +16,29 @@ Use a tool for information that is too detailed, too volatile, or too expensive 
 | Change a small part of an existing file | `FilePatchTool` |
 | Create or completely replace a file | `FileWriteTool` |
 | Run a tightly controlled local command | `CommandLineTool` |
+<<<<<<< HEAD
 | Read or save ExFace object data | `DataSheetReadTool` or `DataSheetImportTool` |
 | Read ExFace documentation | `GetDocsTool` |
 | Inspect model or UXON metadata | One of the `Model*InfoTool` tools |
 | Inspect a concrete page or widget instance | `UiWidgetInfoTool` |
 | Provide deterministic test output | `MockTool` |
+=======
+| Inspect Git changes and history | `GitTool` |
+| Validate PHP syntax | `DevLintPHPTool` |
+| Read or save ExFace object data | `DataSheetReadTool` or `DataSheetImportTool` |
+| Reference or create registry-approved model components | `ModelComponentSaveTool` |
+| Retrieve the physical schema of an SQL connection | `SqlDbmlTool` |
+| Find object data by a configured attribute | `ModelObjectSearchTool` |
+| List, store, or retrieve agent memory for the current user | `NotesListTool`, `NotesWriteTool`, `NotesSearchTool`, or `NotesReadTool` |
+| Read ExFace documentation | `GetDocsTool` |
+| Inspect model or UXON metadata | One of the `Model*InfoTool` tools |
+| Find context-aware UXON properties and values | `UxonAutosuggestTool` |
+| Validate generated UXON | `UxonValidateTool` |
+| Understand the menu and screens of an app | `UiOverviewTool` |
+| Inspect a concrete page or widget instance | `UiWidgetInfoTool` |
+| Provide deterministic test output | `MockTool` |
+| Search where model entities are referenced | `ModelSearchTool` |
+>>>>>>> 189c39a05d8436be45edc3f8dfc1ca9fa48e1553
 
 ## Common configuration
 
@@ -50,7 +68,11 @@ The built-in argument templates are used when `arguments` is omitted. Override t
 
 ## File access configuration
 
+<<<<<<< HEAD
 `CommandLineTool`, `FileReadTool`, `FileWriteTool`, `FilePatchTool`, `FolderReadTool`, and `FileSearchTool` share these properties:
+=======
+`CommandLineTool`, `GitTool`, `DevLintPHPTool`, `FileReadTool`, `FileWriteTool`, `FilePatchTool`, `FolderReadTool`, and `FileSearchTool` share these properties:
+>>>>>>> 189c39a05d8436be45edc3f8dfc1ca9fa48e1553
 
 | Property | Default | Description |
 | --- | --- | --- |
@@ -85,6 +107,51 @@ Paths are validated against the configured base and allowlist before access. Thi
 
 **Result and limits.** The tool returns captured console output in a Markdown code block. Invalid commands, denied folders, failures, and timeouts produce a tool error. Keep the timeout finite and never rely on the model to decide whether an unrestricted command is safe.
 
+<<<<<<< HEAD
+=======
+## `GitTool`
+
+**Alias:** `axenox.GenAI.GitTool` | [UXON prototype](api/docs/exface/Core/Docs/UXON/UXON_prototypes.md?selector=%5Caxenox%5CGenAI%5CAI%5CTools%5CGitTool)
+
+**Purpose.** Runs predefined Git operations in a validated repository folder. Its safe defaults let an agent inspect current changes and search commit history without enabling file-changing operations.
+
+**Use when.** The agent needs to validate a working tree, inspect diffs, find previous work, or view an earlier version of a file. Prefer this tool over `CommandLineTool` for Git because designers configure operation names instead of command regexes.
+
+**Do not use when.** Do not enable mutating operations unless the agent explicitly needs them and its workflow includes suitable review safeguards. The default configuration does not allow staging, commits, branch changes, network synchronization, or other repository modifications.
+
+| UXON property | Default | Description |
+| --- | --- | --- |
+| `allowed_commands` | `["status", "diff", "log", "show", "blame", "grep"]` | Predefined Git operation names. Supported read operations also include `rev-list`, `rev-parse`, `ls-files`, `ls-tree`, `shortlog`, and `describe`. Mutating operations such as `stage`, `commit`, `switch`, `pull`, and `push` require explicit opt-in. An empty list denies every command. |
+| `command_timeout` | `60` | Maximum execution time in seconds. |
+
+| Argument | Required | Description |
+| --- | --- | --- |
+| `command` | Yes | Complete Git command beginning with `git` and an enabled operation. |
+| `folder` | No | Repository folder relative to the configured base path. |
+
+**How to use.** Usually keep the default operation list and restrict `allowed_paths` to the repositories the agent may inspect. To grant another operation, add its predefined name to `allowed_commands`; `stage` maps to `git add`. Unknown names are rejected as configuration errors. The generated validation patterns reject shell operators and options that write command output or invoke external diff and pager helpers.
+
+**Result and limits.** The tool returns Git output in a Markdown code block. It does not parse Git output into structured data. Explicitly enabled mutating commands retain their normal Git behavior and should only be exposed to agents designed to make repository changes.
+
+## `DevLintPHPTool`
+
+**Alias:** `axenox.GenAI.DevLintPHPTool` | [UXON prototype](api/docs/exface/Core/Docs/UXON/UXON_prototypes.md?selector=%5Caxenox%5CGenAI%5CAI%5CTools%5CDevLintPHPTool)
+
+**Purpose.** Validates one PHP file with the current PHP runtime's built-in lint mode without executing the file.
+
+**Use when.** An autonomous development agent has created or changed a PHP file. Run it before considering the change complete to catch parse errors cheaply and locally.
+
+**Do not use when.** PHP lint only checks syntax. It does not verify types, dependencies, coding standards, tests, or runtime behavior, and it does not accept JavaScript or other file types.
+
+| Argument | Required | Description |
+| --- | --- | --- |
+| `path` | Yes | Path to a `.php` file relative to the configured base path. |
+
+**How to use.** Restrict `allowed_paths` to the source trees the agent may validate. The tool fixes the executable and lint option internally; the model can only provide a validated relative file path and cannot add PHP or shell options.
+
+**Result and limits.** The tool returns PHP's lint output in a Markdown code block. A syntax error is a normal diagnostic result so the agent can repair it. Missing, unreadable, denied, and non-PHP files produce a tool error, as does failure to start the PHP process.
+
+>>>>>>> 189c39a05d8436be45edc3f8dfc1ca9fa48e1553
 ## `FileReadTool`
 
 **Alias:** `axenox.GenAI.FileReadTool` | [UXON prototype](api/docs/exface/Core/Docs/UXON/UXON_prototypes.md?selector=%5Caxenox%5CGenAI%5CAI%5CTools%5CFileReadTool)
@@ -144,11 +211,16 @@ Paths are validated against the configured base and allowlist before access. Thi
 | `patch` | Yes | Patch containing exact search and replacement blocks. |
 
 ```text
+<<<<<<< HEAD
 <<<<<<< SEARCH
 exact text, including whitespace
 =======
 replacement text
 >>>>>>> REPLACE
+=======
+exact text, including whitespace
+replacement text
+>>>>>>> 189c39a05d8436be45edc3f8dfc1ca9fa48e1553
 ```
 
 **How to use.** The model supplies a relative path and one or more patch blocks. Search text is case-sensitive and whitespace-sensitive, so each block should be copied from the current file and be small enough to review but unique enough to identify one location. An empty search section can create a file or append content.
@@ -202,6 +274,28 @@ replacement text
 
 **Result and limits.** The result lists matching paths and, when requested, matching line extracts. Avoid an unbounded `**` search from the vendor root. Narrow paths reduce execution time, disk access, and response size.
 
+<<<<<<< HEAD
+=======
+## `SqlDbmlTool`
+
+**Alias:** `axenox.GenAI.SqlDbmlTool` | [UXON prototype](api/docs/exface/Core/Docs/UXON/UXON_prototypes.md?selector=%5Caxenox%5CGenAI%5CAI%5CTools%5CSqlDbmlTool)
+
+**Purpose.** Generates a physical DBML schema from the table-like ExFace metaobjects assigned to an SQL data connection.
+
+**Use when.** An agent needs table names, column names, data types, enum values, and relationships for a connection only on demand. This avoids adding a potentially large schema to every prompt through `SqlDbmlConcept`.
+
+**Do not use when.** Do not use it for non-SQL connections, objects backed by custom SQL statements, or executable DDL. Use `MetamodelDbmlConcept` when conceptual metaobject names are required in every prompt.
+
+| Argument | Required | Description |
+| --- | --- | --- |
+| `connection` | Yes | UID or namespaced alias of the SQL data connection. |
+| `data_address_search` | No | Case-insensitive text to search for in metaobject data addresses. |
+
+**How to use.** Pass the configured connection UID or alias. Omit `data_address_search` to retrieve all table-like objects on the connection. To limit a large schema, pass literal text contained in the physical table addresses: for example, `dbo.` selects objects in the `dbo` schema and `order_` selects objects whose addresses contain that table-name fragment.
+
+**Result and limits.** The result is DBML prefixed with the detected SQL engine. Relationships are emitted only when both objects are present in the result. Missing connections, non-SQL connections, and selections without matching table objects produce a tool error. The tool reads the ExFace metamodel; it does not inspect the live database schema.
+
+>>>>>>> 189c39a05d8436be45edc3f8dfc1ca9fa48e1553
 ## `DataSheetReadTool`
 
 **Alias:** `axenox.GenAI.DataSheetReadTool` | [UXON prototype](api/docs/exface/Core/Docs/UXON/UXON_prototypes.md?selector=%5Caxenox%5CGenAI%5CAI%5CTools%5CDataSheetReadTool)
@@ -238,6 +332,47 @@ replacement text
 
 **Result and limits.** The result contains JSON-formatted rows and metadata in Markdown. Normal ExFace object permissions and DataSheet read restrictions apply. Invalid object aliases, expressions, or filters produce errors.
 
+<<<<<<< HEAD
+=======
+**Configuration.** The tool exposes three UXON properties that control formatting and context:
+
+| UXON property | Type | Default | Description |
+| --- | --- | --- | --- |
+| `output_mode` | enum | `markdown_table` | One of `markdown_table`, `markdown`, or `json`. |
+| `header_level` | integer | `2` | Markdown heading level used for section headers, allowed range 1-6. Invalid values trigger a warning and fall back to `2`. |
+| `include_object_description` | boolean | `true` for `markdown_table`, else `false` | Adds a short object description block after the rendered data if available. |
+
+**Output modes.** The tool supports three renderings: `markdown_table` (default), `markdown`, and `json`. `markdown_table` is best for multi-row result sets. `markdown` switches to a record-by-record summary for empty, single-row, or wide results, where a compact table is not the clearest representation.
+
+**Return value.** The tool returns a string result created by `renderOutput()`. The final output always starts with a brief sentence such as `Read data of object ...`, followed by the selected payload (`markdown_table`, `markdown`, or `json`), and then optionally appends the object description block if enabled.
+
+**Warnings and recoverable issues.** Unsupported or invalid configuration values are treated as warnings rather than fatal errors. The tool falls back to the safe default and keeps the response running. Empty result sets also produce a warning, while failed object-description rendering is swallowed and logged as a warning without breaking the tool result.
+
+## `ModelObjectSearchTool`
+
+**Alias:** `axenox.GenAI.ModelObjectSearchTool` | [UXON prototype](api/docs/exface/Core/Docs/UXON/UXON_prototypes.md?selector=%5Caxenox%5CGenAI%5CAI%5CTools%5CModelObjectSearchTool)
+
+**Purpose.** Searches the object configured in `data_sheet` by the first configured column. By default, it searches `exface.Core.OBJECT` by `NAME`.
+
+**Use when.** The agent needs a compact list of rows matching a user-provided value in one predefined attribute.
+
+**Do not use when.** Do not use it for advanced model analysis or alias/UID lookup across many criteria. Use `ModelObjectInfoTool` or `DataSheetReadTool` for richer or broader queries.
+
+| UXON property | Default | Description |
+| --- | --- | --- |
+| `data_sheet` | `exface.Core.OBJECT` with `NAME` as its first column | Complete DataSheet UXON defining the searched object and returned attributes. The first column is the search attribute. It may also contain additional filters, sorters, and a row limit. |
+
+| Argument | Required | Description |
+| --- | --- | --- |
+| `object_name` | Yes | Value matched exactly against the first configured DataSheet column. |
+
+**Default search configuration.** The first configured column is always used as the search attribute and is also returned in the result. The default object is `exface.Core.OBJECT`; its first column and search attribute is `NAME`. The remaining default returned attributes are `UID`, `ALIAS`, `ALIAS_WITH_NS`, `LABEL`, `SHORT_DESCRIPTION`, `APP`, `READABLE_FLAG`, `WRITABLE_FLAG`, `DATA_SOURCE`, `PARENT_OBJECT`, `HAS_DEFAULT_EDITOR`, and `INHERIT_DATA_SOURCE_BASE_OBJECT`.
+
+**How to use.** Put the attribute to search first in `data_sheet.columns`, followed by any other attributes to return. Pass its search value in `object_name`. For example, an `axenox.GenAI.AI_AGENT` DataSheet beginning with `NAME` searches agents by name; one beginning with `UID` searches them by UID. Filters configured in the DataSheet are applied in addition to this generated search filter. Reads are capped at 100 rows. `ToolIntroductionConcept` lists the effective search object, first-column search attribute, and returned attributes or expressions for each configured instance.
+
+**Result and limits.** The tool returns the configured DataSheet columns as a Markdown table. Available columns depend on the configured object's metamodel. Empty matches are returned as a warning-style message.
+
+>>>>>>> 189c39a05d8436be45edc3f8dfc1ca9fa48e1553
 ## `DataSheetImportTool`
 
 **Alias:** `axenox.GenAI.DataSheetImportTool` | [UXON prototype](api/docs/exface/Core/Docs/UXON/UXON_prototypes.md?selector=%5Caxenox%5CGenAI%5CAI%5CTools%5CDataSheetImportTool)
@@ -261,6 +396,95 @@ replacement text
 
 **Result and limits.** The tool uses the normal DataSheet save operation and returns imported row counts. ExFace authorization and validation remain active. Invalid rows are reported as exceptions where processing can continue; critical failures stop the import.
 
+<<<<<<< HEAD
+=======
+## `NotesListTool`
+
+**Alias:** `axenox.GenAI.NotesListTool` | [UXON prototype](api/docs/exface/Core/Docs/UXON/UXON_prototypes.md?selector=%5Caxenox%5CGenAI%5CAI%5CTools%5CNotesListTool)
+
+**Purpose.** Lists the types and topics of all long-term notes for the invoking agent and authenticated user without exposing their contents.
+
+**Use when.** The agent needs a compact overview of its available notes, for example as prompt context before deciding whether a targeted search is useful. The tool has no arguments.
+
+**Result and limits.** Returns a Markdown table with the columns `Type` and `Topic`, sorted by type and topic. User and agent filters are always derived from the current request and cannot be supplied by the model. Note bodies and UIDs are not read or returned.
+
+## `ModelComponentSaveTool`
+
+**Alias:** `axenox.GenAI.ModelComponentSaveTool` | [UXON prototype](api/docs/exface/Core/Docs/UXON/UXON_prototypes.md?selector=%5Caxenox%5CGenAI%5CAI%5CTools%5CModelComponentSaveTool)
+
+**Purpose.** References existing model components by UID or creates new components using the allowlisted DataSheet templates in Core's component registry.
+
+**Use when.** An agent builds configuration that may reuse existing components and create missing ones, and the permitted component fields must stay centrally controlled by Core.
+
+**Do not use when.** Do not use this tool to edit or delete existing components. A UID input is validated and returned as a reference without being written.
+
+| Argument | Required | Description |
+| --- | --- | --- |
+| `components` | Yes | Array of component operations. Each item contains `component` and either `uid` for an existing reference or `data_sheet` for a new component. |
+
+**Schema source.** The tool lists only component types with `save_component_data` in `ComponentRegistry.config.json`. Its argument JSON Schema is generated from those templates through `DataSheetSchema`. Configured columns are authoritative; a missing `columns` property activates the metamodel fallback.
+
+**Write safety.** The tool rebuilds every write DataSheet from the trusted registry template and copies only validated rows into it. Model-provided columns, filters, and alternative object aliases are rejected. Nested data is recursively rebuilt from each configured `nested_data` template. All new components in one call share a transaction and are rolled back together when creation fails.
+
+**Result.** The JSON result lists every component, whether it was `referenced` or `created`, and its UID values. Existing references are checked against the registry-defined metaobject but never updated.
+
+## `NotesWriteTool`
+
+**Alias:** `axenox.GenAI.NotesWriteTool` | [UXON prototype](api/docs/exface/Core/Docs/UXON/UXON_prototypes.md?selector=%5Caxenox%5CGenAI%5CAI%5CTools%5CNotesWriteTool)
+
+**Purpose.** Stores a typed long-term note for the invoking agent and authenticated user. Memories retain reusable context; suggestions record potential improvements, missing tools, or other opportunities to improve work on a topic.
+
+**Use when.** An agent should remember a stable preference, decision, or other reusable fact across conversations. Use a short, stable topic so later writes can replace the note by exact topic, or supply a UID returned by a notes tool to overwrite a known note explicitly.
+
+**Do not use when.** Do not store secrets, transient conversation details, or information the user did not ask or expect the agent to retain.
+
+| Argument | Required | Description |
+| --- | --- | --- |
+| `topic` | Yes | Short topic that identifies the note within the current user and agent scope. |
+| `note` | Yes | Complete note body. It replaces the existing body when the topic already exists. |
+| `uid` | No | UID of a known note to overwrite explicitly. The note must belong to the current user and agent. |
+| `type` | No | `memory` (default) for reusable context or `suggestion` for potential improvements and missing capabilities. |
+
+**Result and limits.** When `uid` is supplied, the matching scoped note is overwritten with the supplied topic and body; an unknown or out-of-scope UID produces a not-found error. Without `uid`, the tool updates an exact topic match or creates a new note. Updates carry all system attributes read with the note so timestamp conflict checks remain active. The tool returns the saved note UID. User and agent UIDs are derived from the current request and cannot be supplied by the model.
+
+## `NotesReadTool`
+
+**Alias:** `axenox.GenAI.NotesReadTool` | [UXON prototype](api/docs/exface/Core/Docs/UXON/UXON_prototypes.md?selector=%5Caxenox%5CGenAI%5CAI%5CTools%5CNotesReadTool)
+
+**Purpose.** Reads one long-term note by UID for the invoking agent and authenticated user.
+
+**Use when.** `NotesSearchTool` or `NotesWriteTool` supplied a note UID and the agent needs the complete topic and body.
+
+**Do not use when.** Do not guess UIDs or use this tool to discover notes. Search first when the relevant UID is unknown.
+
+| Argument | Required | Description |
+| --- | --- | --- |
+| `note_uid` | Yes | UID of the note to read. |
+
+**Result and limits.** The result contains the type, topic, and complete note body as Markdown. The lookup always includes hidden user and agent filters. Missing and out-of-scope UIDs produce the same not-found error to prevent information disclosure.
+
+## `NotesSearchTool`
+
+**Alias:** `axenox.GenAI.NotesSearchTool` | [UXON prototype](api/docs/exface/Core/Docs/UXON/UXON_prototypes.md?selector=%5Caxenox%5CGenAI%5CAI%5CTools%5CNotesSearchTool)
+
+**Purpose.** Searches long-term note topics and bodies for the invoking agent and authenticated user.
+
+**Use when.** The agent needs to discover whether it has relevant memory before answering or updating a note.
+
+**Do not use when.** If a note UID is already known, use `NotesReadTool` directly.
+
+| Configuration | Default | Description |
+| --- | --- | --- |
+| `excerpt_length` | `300` | Maximum number of note-body characters included in each result. Must be greater than zero. |
+
+| Argument | Required | Description |
+| --- | --- | --- |
+| `query` | No | Text to find in either note topics or note bodies. Leave empty to return all notes. |
+| `type` | No | `all` (default), `memory`, or `suggestion`. Concrete types restrict the search results. |
+
+**Result and limits.** Each match includes its UID, type, topic, and a single-line excerpt limited by `excerpt_length`. The excerpt is centered around the search text when it occurs literally in the note, helping the model select the relevant UID before calling `NotesReadTool` for the complete content. The tool never searches notes belonging to another user or agent.
+
+>>>>>>> 189c39a05d8436be45edc3f8dfc1ca9fa48e1553
 ## `GetTimeTool`
 
 **Alias:** `axenox.GenAI.GetTimeTool` | [UXON prototype](api/docs/exface/Core/Docs/UXON/UXON_prototypes.md?selector=%5Caxenox%5CGenAI%5CAI%5CTools%5CGetTimeTool)
@@ -346,6 +570,32 @@ replacement text
 
 **Result and limits.** Exact matches are returned first, followed by generated Markdown for every match. Broad terms may return several objects, so use the most specific known selector.
 
+<<<<<<< HEAD
+=======
+## `ModelSearchTool`
+
+**Alias:** `axenox.GenAI.ModelSearchTool` | [UXON prototype](api/docs/exface/Core/Docs/UXON/UXON_prototypes.md?selector=%5Caxenox%5CGenAI%5CAI%5CTools%5CModelSearchTool)
+
+**Purpose.** Searches the ExFace metamodel for references and usage locations using the predefined object `exface.Core.SEARCH_RESULT`.
+
+**Use when.** The agent needs to find where an object alias, action alias, page alias, or another model term is referenced inside model UXON.
+
+**Do not use when.** Do not use it for generic business data retrieval. Use `DataSheetReadTool` when you need custom object access or custom columns beyond model-search defaults.
+
+| Argument | Required | Description |
+| --- | --- | --- |
+| `search_query` | Yes | Search term for the model search. |
+| `object_type` | No | Optional type filter such as `exf_object`, `exf_attribute`, `exf_page`, or `exf_object_action`. |
+| `rows_limit` | No | Optional maximum row count. Defaults to `50`. |
+| `rows_offset` | No | Optional pagination offset. Defaults to `0`. |
+
+**How to use.** The tool wraps `DataSheetReadTool` and predefines `object_alias`, columns, and the UXON search filter. You only provide the search term and optional narrowing arguments.
+
+**What it looks like.** The AI enters a search term, for example `search_query = "\"exface.Core.USER\""`, and receives matching usage rows.
+
+**Result and limits.** The result is rendered like `DataSheetReadTool` output and includes matched model entities with usage context fields such as object name, instance name, and instance alias.
+
+>>>>>>> 189c39a05d8436be45edc3f8dfc1ca9fa48e1553
 ## `ModelComponentInfoTool`
 
 **Alias:** `axenox.GenAI.ModelComponentInfoTool` | [UXON prototype](api/docs/exface/Core/Docs/UXON/UXON_prototypes.md?selector=%5Caxenox%5CGenAI%5CAI%5CTools%5CModelComponentInfoTool)
@@ -365,9 +615,40 @@ replacement text
 
 **Result and limits.** The result is the documentation returned by the component registry. Unknown component types or selectors cannot be resolved.
 
+<<<<<<< HEAD
 ## `ModelUxonPrototypeTool`
 
 **Alias:** `axenox.GenAI.ModelUxonPrototypeTool` | [UXON prototype](api/docs/exface/Core/Docs/UXON/UXON_prototypes.md?selector=%5Caxenox%5CGenAI%5CAI%5CTools%5CModelUxonPrototypeTool)
+=======
+## `ModelPrototypeSearchTool`
+
+**Alias:** `axenox.GenAI.ModelPrototypeSearchTool` | [UXON prototype](api/docs/exface/Core/Docs/UXON/UXON_prototypes.md?selector=%5Caxenox%5CGenAI%5CAI%5CTools%5CModelPrototypeSearchTool)
+
+**Purpose.** Searches for UXON prototype classes of a component type by alias.
+
+**Use when.** The agent knows the kind of component, such as an action, behavior, or data type, but needs to discover its prototype selector before creating UXON.
+
+**Do not use when.** If the PHP class or prototype file path is already known, use `ModelPrototypeInfoTool` directly.
+
+| UXON property | Default | Description |
+| --- | --- | --- |
+| `include_prototype_info_if_not_more_results_than` | `1` | Automatically appends the output of `ModelPrototypeInfoTool` when the search returns no more than this number of results. Set to `0` to disable enrichment. |
+
+| Argument | Required | Description |
+| --- | --- | --- |
+| `search_query` | Yes | Prototype alias without namespace. |
+| `component` | Yes | Searchable component type, such as `action`, `behavior`, or `data_type`. |
+| `rows_limit` | No | Optional maximum row count. Defaults to `50`. |
+| `rows_offset` | No | Optional pagination offset. Defaults to `0`. |
+
+**How to use.** Pass a component type and the most specific known alias fragment. By default, a single match includes both the search row and the prototype's UXON documentation, avoiding a second tool call.
+
+**Result and limits.** The result is a Markdown table containing prototype selectors. When the configured result threshold is met, the corresponding UXON prototype documentation is appended. Broad searches return only the table unless the threshold is raised.
+
+## `ModelPrototypeInfoTool`
+
+**Alias:** `axenox.GenAI.ModelPrototypeInfoTool` | [UXON prototype](api/docs/exface/Core/Docs/UXON/UXON_prototypes.md?selector=%5Caxenox%5CGenAI%5CAI%5CTools%5CModelPrototypeInfoTool)
+>>>>>>> 189c39a05d8436be45edc3f8dfc1ca9fa48e1553
 
 **Purpose.** Generates documentation for the configurable UXON properties of a PHP prototype.
 
@@ -383,6 +664,54 @@ replacement text
 
 **Result and limits.** `UxonPrototypeMarkdownPrinter` returns the prototype description and indexed UXON properties. The quality of the result depends on the prototype's annotations being available in the model.
 
+<<<<<<< HEAD
+=======
+## `UxonAutosuggestTool`
+
+**Alias:** `axenox.GenAI.UxonAutosuggestTool` | [UXON prototype](api/docs/exface/Core/Docs/UXON/UXON_prototypes.md?selector=%5Caxenox%5CGenAI%5CAI%5CTools%5CUxonAutosuggestTool)
+
+**Purpose.** Returns the same context-aware property names, values, templates, presets, details, and model entries as the UXON editor autosuggest.
+
+**Use when.** An agent is creating or editing UXON and needs to discover valid properties or values for a specific node. It is particularly useful before generating attributes, relations, component aliases, enum values, or nested UXON structures.
+
+**Do not use when.** Do not use autosuggest as final validation or assume every suggestion is valid outside the supplied context. Use `UxonValidateTool` after assembling the UXON.
+
+| Argument | Required | Description |
+| --- | --- | --- |
+| `uxon` | Yes | Complete UXON object being edited. |
+| `path` | Yes | Array of property names and array indexes from the root to the node being edited. |
+| `input` | Yes | Suggestion type: `field`, `value`, `preset`, `details`, or `modelbrowser`. |
+| `text` | No | Text typed so far, used to filter value and model-browser suggestions. |
+| `object` | No | Alias or UID of the root metaobject that supplies object context. |
+| `prototype` | No | Fully qualified root prototype class or PHP file path relative to the vendor folder. |
+| `schema` | No | UXON schema class or schema name used to interpret the UXON. |
+
+**How to use.** Pass the complete current UXON because sibling and parent properties can determine the applicable prototype and valid values. Use `field` to request property names and templates, and `value` to request values for the property addressed by `path`. Use `preset` for predefined structures, `details` for property documentation, and `modelbrowser` for structured metamodel entries. Supply reliable object and prototype context whenever available.
+
+**Result and limits.** The result is JSON produced by the core `UxonAutosuggest` action. Field suggestions contain `values` and `templates`; value suggestions contain `values`; presets, details, and model-browser calls return their mode-specific structures. Empty suggestions can mean that no value is known for the supplied context. Action failures are returned as tool errors.
+
+## `UxonValidateTool`
+
+**Alias:** `axenox.GenAI.UxonValidateTool` | [UXON prototype](api/docs/exface/Core/Docs/UXON/UXON_prototypes.md?selector=%5Caxenox%5CGenAI%5CAI%5CTools%5CUxonValidateTool)
+
+**Purpose.** Validates generated UXON and returns structured diagnostics that an agent can use to correct likely configuration errors.
+
+**Use when.** An agent has created or changed UXON for a widget, action, behavior, connector, or another configurable prototype. Call it before returning or applying the UXON when the relevant schema or prototype context is known.
+
+**Do not use when.** Do not treat the result as authoritative runtime validation. The validator creates mock components and can report false positives or miss context-dependent errors.
+
+| Argument | Required | Description |
+| --- | --- | --- |
+| `uxon` | Yes | UXON object to validate. |
+| `schema` | No | UXON schema class or schema name used to interpret the UXON. |
+| `object` | No | Alias or UID of the root metaobject that supplies object context. |
+| `prototype` | No | Fully qualified root prototype class or PHP file path relative to the vendor folder. |
+
+**How to use.** Pass the generated UXON and as much reliable context as is available. A prototype may be supplied as `\exface\Core\Widgets\DataTable` or `exface/core/Widgets/DataTable.php`. The explicit tool call always runs validation and is not disabled by the `DEBUG.AUTOMATIC_UXON_VALIDATION` setting used by the editor action.
+
+**Result and limits.** The result is a JSON array of objects with `path` and `message` properties. An empty array means that no issues were detected, not that the UXON is guaranteed to work. Invalid tool input or a validator failure is returned as a tool error.
+
+>>>>>>> 189c39a05d8436be45edc3f8dfc1ca9fa48e1553
 ## `ModelWidgetTypeInfoTool`
 
 **Alias:** `axenox.GenAI.ModelWidgetTypeInfoTool` | [UXON prototype](api/docs/exface/Core/Docs/UXON/UXON_prototypes.md?selector=%5Caxenox%5CGenAI%5CAI%5CTools%5CModelWidgetTypeInfoTool)
@@ -401,6 +730,28 @@ replacement text
 
 **Result and limits.** The tool combines indexed UXON annotations with widget-function and preset metadata. Missing or incomplete model annotations lead to incomplete documentation.
 
+<<<<<<< HEAD
+=======
+## `UiOverviewTool`
+
+**Alias:** `axenox.GenAI.UiOverviewTool` | [UXON prototype](api/docs/exface/Core/Docs/UXON/UXON_prototypes.md?selector=%5Caxenox%5CGenAI%5CAI%5CTools%5CUiOverviewTool)
+
+**Purpose.** Produces a Markdown overview of the platform's main menu and of the screens of a given app. The main menu is listed completely with a page link for every entry, while the pages of the app of interest and the dialogs reachable from them are described in detail.
+
+**Use when.** The agent needs to understand which screens an app offers, what a user can do on them, and how to navigate to further pages. The page links in the menu can be passed to `UiWidgetInfoTool` for deeper inspection.
+
+**Do not use when.** To inspect the UXON of a single, already known page or dialog, use `UiWidgetInfoTool` directly.
+
+| Argument | Required | Description |
+| --- | --- | --- |
+| `app` | Yes | Alias of the app whose pages are described in detail (for example `exface.Core`). |
+| `depth` | No | How deep to follow dialogs opened by buttons inside the app's pages. Defaults to `10`. |
+
+**How to use.** The model supplies the app alias and optionally a recursion depth. The menu is built the same way as the `NavMenu` widget, starting from the default server root page.
+
+**Result and limits.** Each screen chapter lists the meta objects shown on the screen and all buttons available to the user. Dialogs are documented recursively until the depth budget is exhausted; only menu-visible pages appear in the overview.
+
+>>>>>>> 189c39a05d8436be45edc3f8dfc1ca9fa48e1553
 ## `UiWidgetInfoTool`
 
 **Alias:** `axenox.GenAI.UiWidgetInfoTool` | [UXON prototype](api/docs/exface/Core/Docs/UXON/UXON_prototypes.md?selector=%5Caxenox%5CGenAI%5CAI%5CTools%5CUiWidgetInfoTool)

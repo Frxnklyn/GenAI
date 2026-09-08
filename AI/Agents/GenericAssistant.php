@@ -15,9 +15,11 @@ use axenox\GenAI\Exceptions\AiConceptRenderingError;
 use axenox\GenAI\Exceptions\AiConnectionNotFoundError;
 use axenox\GenAI\Exceptions\AiPromptError;
 use axenox\GenAI\Exceptions\AiToolCriticalError;
+use axenox\GenAI\Exceptions\AiToolConfigurationWarning;
 use axenox\GenAI\Exceptions\AiToolRuntimeError;
 use axenox\GenAI\Interfaces\AiConceptInterface;
 use axenox\GenAI\Interfaces\AiConversationInterface;
+use axenox\GenAI\Interfaces\AiSkillInterface;
 use axenox\GenAI\Interfaces\AiToolInterface;
 use axenox\GenAI\Uxon\AiAgentUxonSchema;
 use exface\Core\CommonLogic\Traits\AliasTrait;
@@ -108,15 +110,27 @@ class GenericAssistant implements AiAgentInterface
 
     private $responseJsonSchema = null;
 
+    private bool $feedbackMode = false;
+
     private $devMode = null;
 
     private $responseAnswerPath = null;
 
     private $responseTitlePath = null;
 
+    /** @var AiToolInterface[]|null */
     private ?array $tools = null;
+
+    /** @var UxonObject[]|null */
     private ?array $toolsUxon = null;
+
+    /** @var AiSkillInterface[] */
+    private array $skills = [];
+
+    private UxonObject $skillsUxon;
     private ?AiConversationInterface $conversation = null;
+
+    private bool $appendUnusedSkills = true;
 
     private $maxNumberOfCalls = 10;
 
@@ -140,6 +154,7 @@ class GenericAssistant implements AiAgentInterface
     {
         $this->workbench = $selector->getWorkbench();
         $this->selector = $selector;
+        $this->skillsUxon = new UxonObject();
         if ($uxon !== null) {
             $this->importUxonObject($uxon);
         }
@@ -484,10 +499,14 @@ class GenericAssistant implements AiAgentInterface
                         if (! $e instanceof AiToolCriticalError) {
                             $e = new AiToolCriticalError($tool, $prompt, 'Unexpected error in AI tool. ' . $e->getMessage(), null, $e);
                         }
-                        $resultOfTool = new AiToolResultString($tool, $args, 'ERROR: Tool execution failed. ' . $e->getMessage());
+                        $e->setToolCall($call);
+                        $resultOfTool = new AiToolResultString($tool, $args, 'ERROR: Tool execution failed. ' . $e->getMessage(), null, [], [$e]);
                         $exceptions = [$e];
                     }
                     foreach ($exceptions as $e) {
+                        if ($e instanceof AiToolCriticalError) {
+                            $e->setToolCall($call);
+                        }
                         $this->getWorkbench()->getLogger()->logException($e);
                     }
                     $conversation->saveExceptions($exceptions);
@@ -496,7 +515,14 @@ class GenericAssistant implements AiAgentInterface
                     // user or continue with other tools.
                     if ($resultOfTool && $resultOfTool->isFailed()) {
                         // TODO should we give more error details to the LLM
-                        $resultOfTool = new AiToolResultString($tool, $args, "ERROR: Tool execution failed. It seems, this tool is broken.");
+                        $resultOfTool = new AiToolResultString(
+                            $tool,
+                            $args,
+                            "ERROR: Tool execution failed. It seems, this tool is broken.",
+                            null,
+                            [],
+                            $resultOfTool->getExceptions()
+                        );
                     }
                     
                 } else {
@@ -545,8 +571,47 @@ class GenericAssistant implements AiAgentInterface
      */
     protected function setConcepts(UxonObject $arrayOfConcepts) : AiAgentInterface
     {
-        $this->conceptConfig = null;
         $this->conceptConfig = $arrayOfConcepts;
+        $this->systemPromptRendered = null;
+        $this->tools = null;
+        return $this;
+    }
+
+    /**
+        * Imports the transient skill map assembled by the agent factory.
+        * This runtime property is not persisted in the agent version configuration.
+     *
+     * @param UxonObject $skills
+     * @return AiAgentInterface
+        * @internal
+     */
+    protected function setSkills(UxonObject $skills) : AiAgentInterface
+    {
+        $this->skillsUxon = $skills;
+        $this->skills = [];
+        $this->systemPromptRendered = null;
+        $this->tools = null;
+        return $this;
+    }
+
+    /**
+     * Set to FALSE to disable appending skills to the system prompt automatically when their
+     * placeholder is not used explicitly inside the instructions
+     *
+     * By default, skills that allow it (see `auto_append` property of a skill) are appended to
+     * the end of the system prompt if their placeholder was not used inside the instructions text.
+     *
+     * @uxon-property append_unused_skills
+     * @uxon-type boolean
+     * @uxon-default true
+     *
+     * @param bool $value
+     * @return AiAgentInterface
+     */
+    protected function setAppendUnusedSkills(bool $value) : AiAgentInterface
+    {
+        $this->appendUnusedSkills = $value;
+        $this->systemPromptRendered = null;
         return $this;
     }
 
@@ -605,11 +670,10 @@ class GenericAssistant implements AiAgentInterface
     }
 
     /**
-     * 
-     * @param \axenox\GenAI\Interfaces\AiPromptInterface $promt
-     * @return string
+     * {@inheritDoc}
+     * @see \axenox\GenAI\Interfaces\AiAgentInterface::getSystemPrompt()
      */
-    protected function getSystemPrompt(AiPromptInterface $prompt) : string
+    public function getSystemPrompt(AiPromptInterface $prompt) : string
     {
         if ($this->systemPromptRendered === null) {
             $renderer = new BracketHashStringTemplateRenderer($this->workbench);
@@ -629,6 +693,13 @@ class GenericAssistant implements AiAgentInterface
                     }
                 }
             }
+            $this->skills = [];
+            foreach ($this->skillsUxon as $placeholder => $skillUxon) {
+                $skill = AiFactory::createSkillFromUxon($this, $prompt, $placeholder, $skillUxon);
+                $this->skills[] = $skill;
+                $renderer->addPlaceholder($skill);
+            }
+            $this->tools = null;
             
             try {
                 
@@ -638,11 +709,41 @@ class GenericAssistant implements AiAgentInterface
                     $systemPrompt = $this->systemPrompt;
                 }
                 $this->systemPromptRendered = $renderer->render($systemPrompt ?? '');
+                if ($this->appendUnusedSkills === true) {
+                    $this->systemPromptRendered .= $this->renderUnusedSkills($systemPrompt ?? '');
+                }
             } catch (\Throwable $e) {
                 throw new AiConceptRenderingError($renderer, 'Cannot apply AI concepts. ' . $e->getMessage(), null, $e, $systemPrompt);
             }
         }
         return $this->systemPromptRendered;
+    }
+
+    /**
+     * Renders skills, whose placeholder was not used in the instructions, but which allow to be
+     * appended automatically (see `auto_append` property of a skill).
+     *
+     * @param string $rawInstructions
+     * @return string
+     */
+    protected function renderUnusedSkills(string $rawInstructions) : string
+    {
+        $usedPlaceholders = StringDataType::findPlaceholders($rawInstructions);
+        $appendix = '';
+        foreach ($this->skills as $skill) {
+            if (in_array($skill->getPlaceholder(), $usedPlaceholders, true)) {
+                continue;
+            }
+            if (! $skill->isAutoAppendEnabled()) {
+                continue;
+            }
+            $skillText = $skill->resolve([$skill->getPlaceholder()])[$skill->getPlaceholder()] ?? '';
+            if (trim($skillText) === '') {
+                continue;
+            }
+            $appendix .= "\n\n" . $skillText;
+        }
+        return $appendix;
     }
 
     protected function getApp(AiPromptInterface $prompt) : ?AppInterface
@@ -848,7 +949,94 @@ class GenericAssistant implements AiAgentInterface
      */
     protected function getResponseJsonSchema() : ?array
     {
-        return $this->responseJsonSchema;
+        if ($this->responseJsonSchema === null) {
+            if ($this->feedbackMode === false) {
+                return null;
+            }
+
+            $this->responseJsonSchema = [
+                'type' => 'object',
+                'properties' => [
+                    'result' => [
+                        'type' => 'string',
+                        'description' => 'Main answer content as markdown or plain text.'
+                    ]
+                ],
+                'required' => ['result'],
+                'additionalProperties' => false
+            ];
+
+            if ($this->responseAnswerPath === null) {
+                $this->responseAnswerPath = '$.result';
+            }
+        }
+
+        if ($this->feedbackMode === false) {
+            return $this->responseJsonSchema;
+        }
+
+        return $this->enrichResponseJsonSchemaWithFeedback($this->responseJsonSchema);
+    }
+
+    /**
+     * Adds a structured feedback block to the response JSON schema so the LLM can explain
+     * which steps or tool calls were necessary, which new tools it would need, and which
+     * improvements it suggests.
+     *
+     * @uxon-property feedback_mode
+     * @uxon-type boolean
+     * @uxon-default false
+     *
+     * @param bool $value
+     * @return GenericAssistant
+     */
+    protected function setFeedbackMode(bool $value) : GenericAssistant
+    {
+        $this->feedbackMode = $value;
+        if ($value === true && $this->responseAnswerPath === null && $this->responseJsonSchema === null) {
+            $this->responseAnswerPath = '$.result';
+        }
+        return $this;
+    }
+
+    public function getFeedbackMode() : bool
+    {
+        return $this->feedbackMode;
+    }
+
+    protected function enrichResponseJsonSchemaWithFeedback(array $schema) : array
+    {
+        if (!isset($schema['type']) || $schema['type'] !== 'object' || !is_array($schema['properties'] ?? null)) {
+            return $schema;
+        }
+
+        if (isset($schema['properties']['feedback'])) {
+            return $schema;
+        }
+
+        $schema['properties']['feedback'] = [
+            'type' => 'object',
+            'description' => 'Structured feedback about the workflow and possible improvements.',
+            'properties' => [
+                'reasoning' => [
+                    'type' => 'string',
+                    'description' => 'Explain what was done and why it was necessary, including relevant tool calls and the reasoning behind them.'
+                ],
+                'new_tools' => [
+                    'type' => 'string',
+                    'description' => 'List suggested new tools or capabilities, including what they should do and why they are needed.'
+                ],
+                'improvement_suggestions' => [
+                    'type' => 'string',
+                    'description' => 'List concrete improvement suggestions for the workflow, instructions, or tooling.'
+                ]
+            ],
+            'required' => ['reasoning', 'new_tools', 'improvement_suggestions'],
+            'additionalProperties' => false
+        ];
+
+        $schema['required'] = array_values(array_unique(array_merge($schema['required'] ?? [], ['feedback'])));
+        return $schema;
     }
 
     /**
@@ -856,8 +1044,8 @@ class GenericAssistant implements AiAgentInterface
      * @return bool
      */
     protected function hasResponseJsonSchema() : bool
-    {        
-        return $this->responseJsonSchema !== null;
+    {
+        return $this->getResponseJsonSchema() !== null;
     }
 
     public function setDevmode(bool $trueOrFalse): AiAgentInterface
@@ -980,6 +1168,7 @@ class GenericAssistant implements AiAgentInterface
         foreach ($objectWithToolDefs as $toolName => $toolUxon) {
             $this->toolsUxon[$toolName] = $toolUxon;
         }
+        $this->tools = null;
         return $this;
     }
 
@@ -990,12 +1179,43 @@ class GenericAssistant implements AiAgentInterface
     public function getTools() : array
     {
         if ($this->tools === null) {
-            if ($this->toolsUxon === null) {
-                $this->tools = [];
-            } else {
-                foreach ($this->toolsUxon as $toolName => $uxon) {
-                    $tool = AiFactory::createToolFromUxon($this->workbench, $uxon, $toolName);
-                    $this->addTool($tool);
+            $this->tools = [];
+            $toolSources = [];
+            $warnings = [];
+
+            foreach ($this->skills as $skill) {
+                $source = 'skill "' . $skill->getPlaceholder() . '"';
+                foreach ($skill->getTools() as $toolName => $tool) {
+                    if (isset($this->tools[$toolName])) {
+                        $warnings[] = new AiToolConfigurationWarning(
+                            'AI tool "' . $toolName . '" from ' . $source
+                            . ' overrides the tool from ' . $toolSources[$toolName] . '.'
+                        );
+                    }
+                    $this->tools[$toolName] = $tool;
+                    $toolSources[$toolName] = $source;
+                }
+                $warnings = array_merge($warnings, $skill->getWarnings());
+            }
+
+            foreach ($this->toolsUxon ?? [] as $toolName => $toolUxon) {
+                if (isset($this->tools[$toolName])) {
+                    $warnings[] = new AiToolConfigurationWarning(
+                        'AI tool "' . $toolName . '" configured on agent "'
+                        . $this->getAliasWithNamespace() . '" overrides the tool from ' . $toolSources[$toolName] . '.'
+                    );
+                }
+                $this->tools[$toolName] = AiFactory::createToolFromUxon($this->workbench, $toolUxon, $toolName);
+                $toolSources[$toolName] = 'agent configuration';
+            }
+
+            if ($warnings !== []) {
+                if ($this->conversation !== null) {
+                    $this->conversation->saveWarnings($warnings);
+                } else {
+                    foreach ($warnings as $warning) {
+                        $this->workbench->getLogger()->logException($warning);
+                    }
                 }
             }
         }

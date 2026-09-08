@@ -17,9 +17,15 @@ use exface\Core\Interfaces\Filesystem\FileInfoInterface;
 use exface\Core\Interfaces\WorkbenchInterface;
 
 /**
- * This AI tool allows an LLM to read a file from selected folders.
+ * Reads a file from allowed paths with optional chunking.
+ * 
+ * Currently, this tool can only read text files. No binaries!
  * 
  * ## Example configuration in an assistant
+ * 
+ * Only files from the `axenox` and `exface` packages are allowed to be read. Only the first argument (`path`)
+ * is overwritten to add some use-case specific examples and a more precise description. The other arguments
+ * will be added automatically.
  * 
  * ```
  *  {
@@ -53,8 +59,8 @@ use exface\Core\Interfaces\WorkbenchInterface;
  * 
  * ## Partial reads
  * 
- * Large files can be read in chunks using the optional `start_with_line` and `max_lines` arguments. `start_with_line`
- * is a 1-based line number to start reading from (defaults to the first line) and `max_lines` limits how many lines
+ * Large files can be read in chunks using the optional `start_line` and `end_line` arguments. `start_line`
+ * is a 1-based line number to start reading from (defaults to the first line) and `end_line` limits how many lines
  * are returned (defaults to the rest of the file). This lets an LLM page through a file without loading it entirely.
  * 
  * ## Support for common AI instruction formats
@@ -85,9 +91,9 @@ class FileReadTool extends AbstractAiTool
 
     public const ARG_PATH = 'path';
 
-    public const ARG_START_WITH_LINE = 'start_with_line';
+    public const ARG_START_LINE = 'start_line';
 
-    public const ARG_MAX_LINES = 'max_lines';
+    public const ARG_END_LINE = 'end_line';
 
     private bool $includeInstructionsForGithubCopilot = true;
 
@@ -114,9 +120,9 @@ class FileReadTool extends AbstractAiTool
             throw new AiToolRuntimeError($this, $prompt, 'Failed to read file: ' . $relativePath);
         }
 
-        $startWithLine = $arguments[1] ?? null;
-        $maxLines = $arguments[2] ?? null;
-        if ($startWithLine !== null && $startWithLine !== '') {
+        $startWithLine = $arguments[2] ?? 1;
+        $maxLines = $arguments[1] ?? null;
+        if ($startWithLine !== '') {
             $startWithLine = (int) $startWithLine;
         } else {
             $startWithLine = null;
@@ -126,7 +132,7 @@ class FileReadTool extends AbstractAiTool
         } else {
             $maxLines = null;
         }
-        if ($startWithLine !== null || $maxLines !== null) {
+        if ($startWithLine > 1 || $maxLines !== null) {
             $content = $this->sliceLines($content, $startWithLine, $maxLines);
         }
 
@@ -138,7 +144,7 @@ class FileReadTool extends AbstractAiTool
         }
 
         if ($this->includeInstructionsForGithubCopilot === true) {
-            $result .= $this->buildInstructionsChapter($fileInfo, $prompt);
+            $result .= $this->buildInstructionsChapter($fileInfo, $prompt, true);
         }
 
         return new AiToolResultString($this, $arguments, $result, $this->getReturnDataType());
@@ -172,25 +178,50 @@ class FileReadTool extends AbstractAiTool
      * @param AiPromptInterface $prompt
      * @return string
      */
-    protected function buildInstructionsChapter(FileInfoInterface $fileInfo, AiPromptInterface $prompt) : string
+    protected function buildInstructionsChapter(FileInfoInterface $fileInfo, AiPromptInterface $prompt, bool $onlyMetadata = true) : string
     {
-        $instructions = $this->findInstructions($fileInfo);
+        $instructions = $this->findInstructionsMetadata($fileInfo);
         if (empty($instructions)) {
             return '';
         }
 
         $chapters = '';
-        foreach ($instructions as $instructionFile) {
+        foreach ($instructions as $instrData) {
+            $instructionFile = $instrData['file'];
             $knowledgeKey = $instructionFile->getPathAbsolute();
             if ($prompt->hasKnowledge($knowledgeKey)) {
                 continue;
             }
+            // Add matching instructions files
             $body = $instructionFile->openFile()->read();
             $body = trim(MarkdownDataType::stripFrontMatter($body));
             if ($body === '') {
                 continue;
             }
-            $chapters .= "\n\n" . MarkdownDataType::convertHeaderLevels($body, 2);
+            // We can include the entire file completely (burns lots of tokens) or just the metadata to
+            // allow the LLM to read the file separately.
+            if ($onlyMetadata === true) {
+                // Only add the frontmatter metadata of the instruction file, not the full content
+                $frontmatter = $instrData['frontmatter'] ?? [];
+                if ($frontmatter['name']) {
+                    // If there is meaningful frontmatter, paste it here
+                    $frontmatterList = implode("\n\t", array_map(fn($k, $v) => "- {$k}: {$v}", array_keys($frontmatter), $frontmatter));
+                    $chapters .= <<<MD
+
+- `{$instrData['path']}`: 
+    {$frontmatterList}
+MD;
+                } else {
+                    // If it is just the file, inlcude the path without any details
+                    $chapters .= <<<MD
+
+- `{$instrData['path']}`
+MD;
+                }                
+            } else {
+                $chapters .= "\n\n" . MarkdownDataType::convertHeaderLevels($body, 2);
+            }
+            
             $prompt->addKnowledge($knowledgeKey, $body);
         }
 
@@ -198,21 +229,21 @@ class FileReadTool extends AbstractAiTool
             return '';
         }
 
-        return "\n\n# Instructions\n\n" . $chapters . "\n";
+        return "\n\n# Applicable instructions\n\n" . $chapters . "\n";
     }
     
     /**
      * Returns a slice of the given content based on a 1-based start line and a maximum number of lines.
      *
      * @param string $content
-     * @param int|null $startWithLine
+     * @param int $startWithLine
      * @param int|null $maxLines
      * @return string
      */
-    protected function sliceLines(string $content, ?int $startWithLine, ?int $maxLines) : string
+    protected function sliceLines(string $content, int $startWithLine = 1, ?int $maxLines = null) : string
     {
         $lines = preg_split('/\r\n|\r|\n/', $content);
-        $start = $startWithLine !== null ? max($startWithLine, 1) : 1;
+        $start = max($startWithLine, 1);
         $offset = $start - 1;
         if ($maxLines !== null) {
             $slice = array_slice($lines, $offset, max($maxLines, 0));
@@ -260,14 +291,15 @@ FM;
                 ->setDescription('Path to the file relative to the configured base path.'),
             (new ServiceParameter($self))
                 ->setDataType(new UxonObject(['alias' => 'exface.Core.Integer']))
-                ->setName(self::ARG_START_WITH_LINE)
-                ->setDescription('Optional 1-based line number to start reading from. Use together with max_lines to read large files in chunks.')
+                ->setName(self::ARG_END_LINE)
+                ->setDescription('Optional maximum number of lines to read starting from start_line. If omitted, the file is read to the end.')
                 ->setRequired(false),
             (new ServiceParameter($self))
                 ->setDataType(new UxonObject(['alias' => 'exface.Core.Integer']))
-                ->setName(self::ARG_MAX_LINES)
-                ->setDescription('Optional maximum number of lines to read starting from start_with_line. If omitted, the file is read to the end.')
-                ->setRequired(false),
+                ->setName(self::ARG_START_LINE)
+                ->setDescription('Optional 1-based line number to start reading from. Use together with end_line to read large files in chunks.')
+                ->setRequired(false)
+                ->setDefaultValue(1),
         ];
     }
 
@@ -279,5 +311,4 @@ FM;
     {
         return DataTypeFactory::createFromPrototype($this->getWorkbench(), MarkdownDataType::class);
     }
-
 }

@@ -68,9 +68,31 @@ class AiConversation implements AiConversationInterface
         $this->conversationId = $conversationId ?? $this->prompt->getConversationUid();
         if ($this->conversationId !== null) {
             $this->prompt->setConversationUid($this->conversationId);
+            $this->sequenceNumber = $this->loadMaxSequenceNumber() + 1;
         } else {
             $this->createConversation($query);
         }
+    }
+
+    /**
+     * Queries the highest SEQUENCE_NUMBER stored for this conversation.
+     *
+     * @return int The current maximum, or -1 if no messages exist yet.
+     */
+    protected function loadMaxSequenceNumber() : int
+    {
+        $messageSheet = DataSheetFactory::createFromObjectIdOrAlias($this->workbench, 'axenox.GenAI.AI_MESSAGE');
+        $messageSheet->getColumns()->addFromExpression('SEQUENCE_NUMBER');
+        $messageSheet->getFilters()->addConditionFromString('AI_CONVERSATION', $this->conversationId);
+        $messageSheet->getSorters()->addFromString('SEQUENCE_NUMBER', 'DESC');
+        $messageSheet->setRowsLimit(1);
+        $messageSheet->dataRead();
+
+        if ($messageSheet->isEmpty()) {
+            return -1;
+        }
+
+        return (int) $messageSheet->getColumns()->getByExpression('SEQUENCE_NUMBER')->getValue(0);
     }
 
     /**
@@ -104,16 +126,11 @@ class AiConversation implements AiConversationInterface
         $transaction = $this->workbench->data()->startTransaction();
         $conversation = DataSheetFactory::createFromObjectIdOrAlias($this->workbench, 'axenox.GenAI.AI_CONVERSATION');
 
-        $modelName = null;
         $connectionId = null;
 
         try {
             $connection = $this->assistant->getConnection();
             $connectionId = $connection->getId();
-
-            if ($query !== null) {
-                $modelName = $connection->getModelName($query);
-            }
         } catch (\Throwable $e) {
             // TODO possible Errorhandling
         }
@@ -131,7 +148,6 @@ class AiConversation implements AiConversationInterface
             'TITLE' => $title,
             'DATA' => $dataUxon->toJson(),
             'DEVMODE' => $this->assistant->getDevmode() ? 1 : 0,
-            'MODEL' => $modelName,
             'CONNECTION' => $connectionId
         ];
         if ($this->prompt->hasMetaObject()) {
@@ -189,6 +205,7 @@ class AiConversation implements AiConversationInterface
                 'ROLE' => AiMessageTypeDataType::SYSTEM,
                 'MESSAGE' => $systemPrompt,
                 'DATA' => $dataUxon->toJson(true),
+                'MODEL' => $this->assistant->getConnection()->getModelName(),
                 'SEQUENCE_NUMBER' => $this->sequenceNumber++
             ]);
 
@@ -231,6 +248,7 @@ class AiConversation implements AiConversationInterface
                 'USER' => $this->workbench->getSecurity()->getAuthenticatedUser()->getUid(),
                 'ROLE' => AiMessageTypeDataType::USER,
                 'MESSAGE' => $query->getUserPrompt(),
+                'MODEL' => $this->assistant->getConnection()->getModelName(),
                 'SEQUENCE_NUMBER' => $this->sequenceNumber++
             ]);
             $messageSheet->dataCreate(false, $transaction);
@@ -289,6 +307,7 @@ class AiConversation implements AiConversationInterface
                 'ROLE' => AiMessageTypeDataType::TOOLCALLING,
                 'MESSAGE' => $markdown,
                 'DATA' => UxonObject::fromArray($query->getResponseMessage())->toJson(true),
+                'MODEL' => $this->assistant->getConnection()->getModelName(),
                 'SEQUENCE_NUMBER' => $this->sequenceNumber++,
                 'TOKENS_COMPLETION' => $query->getTokensInAnswer(),
                 'TOKENS_PROMPT' => $query->getTokensInPrompt(),
@@ -297,7 +316,9 @@ class AiConversation implements AiConversationInterface
             ]);
 
             $message->dataCreate(false, $transaction);
+            $messageUid = $message->getUidColumn()->getValue(0);
             $transaction->commit();
+            $this->saveToolCallRecords($toolCalls, $messageUid);
         } catch (\Throwable $e) {
             $transaction->rollback();
             $this->workbench->getLogger()->logException($e);
@@ -330,6 +351,7 @@ class AiConversation implements AiConversationInterface
                 'USER' => $this->workbench->getSecurity()->getAuthenticatedUser()->getUid(),
                 'ROLE' => AiMessageTypeDataType::ASSISTANT,
                 'MESSAGE' => $answer,
+                'MODEL' => $this->assistant->getConnection()->getModelName(),
                 'SEQUENCE_NUMBER' => $this->sequenceNumber,
                 'TOKENS_COMPLETION' => $query->getTokensInAnswer(),
                 'TOKENS_PROMPT' => $query->getTokensInPrompt(),
@@ -381,16 +403,92 @@ class AiConversation implements AiConversationInterface
                 'ROLE' => AiMessageTypeDataType::TOOL,
                 'DATA' => UxonObject::fromArray($responses)->toJson(true),
                 'MESSAGE' => $markdown,
+                'MODEL' => $this->assistant->getConnection()->getModelName(),
                 'SEQUENCE_NUMBER' => $this->sequenceNumber++
             ]);
 
             $message->dataCreate(false, $transaction);
             $transaction->commit();
+            $this->saveToolCallResults($responses);
             return null;
         } catch (\Throwable $e) {
             $transaction->rollback();
             $this->workbench->getLogger()->logException($e);
             return $responses;
+        }
+    }
+
+    /**
+     * Saves individual tool-call request records without affecting message persistence.
+     *
+     * @param array $toolCalls
+     * @param string $messageUid
+     * @return void
+     */
+    protected function saveToolCallRecords(array $toolCalls, string $messageUid) : void
+    {
+        try {
+            $transaction = $this->workbench->data()->startTransaction();
+            $toolCallSheet = DataSheetFactory::createFromObjectIdOrAlias($this->workbench, 'axenox.GenAI.AI_TOOL_CALL');
+            foreach ($toolCalls as $index => $toolCall) {
+                $toolCallSheet->addRow([
+                    'AI_CONVERSATION' => $this->conversationId,
+                    'AI_MESSAGE' => $messageUid,
+                    'CALL_INDEX' => $index + 1,
+                    'CALL_ID' => $toolCall->getCallId(),
+                    'TOOL_NAME' => $toolCall->getToolName(),
+                    'TOOL_ALIAS' => $this->assistant->getTool($toolCall->getToolName())->getAliasWithNamespace(),
+                    'CALL_DISPLAY' => $toolCall->__toString(),
+                    'ARGUMENTS' => UxonObject::fromArray($toolCall->getArguments())->toJson(true)
+                ]);
+            }
+            $toolCallSheet->dataCreate(false, $transaction);
+            $transaction->commit();
+        } catch (\Throwable $e) {
+            if (isset($transaction)) {
+                $transaction->rollback();
+            }
+            $this->workbench->getLogger()->logException($e);
+        }
+    }
+
+    /**
+     * Saves tool-call results without affecting message persistence.
+     *
+     * @param AiToolCallResponse[] $responses
+     * @return void
+     */
+    protected function saveToolCallResults(array $responses) : void
+    {
+        try {
+            $transaction = $this->workbench->data()->startTransaction();
+            foreach ($responses as $response) {
+                $toolCallSheet = DataSheetFactory::createFromObjectIdOrAlias($this->workbench, 'axenox.GenAI.AI_TOOL_CALL');
+                $toolCallSheet->getColumns()->addFromSystemAttributes();
+                $toolCallSheet->getFilters()->addConditionFromString('AI_CONVERSATION', $this->conversationId);
+                $toolCallSheet->getFilters()->addConditionFromString('CALL_ID', $response->getCallId());
+                $toolCallSheet->dataRead();
+
+                if ($toolCallSheet->countRows() === 1) {
+                    $toolCallSheet->getColumns()->addMultiple(['RESULT', 'RESULT_LENGTH_CHARS', 'FAILED']);
+                    $toolResult = $response->getToolResult();
+                    $result = $toolResult->getValue();
+                    if ($toolResult->isFailed() && ($exception = $toolResult->getExceptions()[0] ?? null) instanceof \Throwable) {
+                        $result = $exception->getMessage();
+                    }
+                    $resultLengthChars = mb_strlen((string)$result, 'UTF-8');
+                    $toolCallSheet->setCellValue('RESULT', 0, $result);
+                    $toolCallSheet->setCellValue('RESULT_LENGTH_CHARS', 0, $resultLengthChars);
+                    $toolCallSheet->setCellValue('FAILED', 0, $toolResult->isFailed() ? 1 : 0);
+                    $toolCallSheet->dataUpdate(false, $transaction);
+                }
+            }
+            $transaction->commit();
+        } catch (\Throwable $e) {
+            if (isset($transaction)) {
+                $transaction->rollback();
+            }
+            $this->workbench->getLogger()->logException($e);
         }
     }
 
@@ -469,6 +567,7 @@ class AiConversation implements AiConversationInterface
                 'ROLE' => AiMessageTypeDataType::ERROR,
                 'DATA' => $dataUxon->toJson(true),
                 'MESSAGE' => $markdown,
+                'MODEL' => $this->assistant->getConnection()->getModelName(),
                 'SEQUENCE_NUMBER' => $this->sequenceNumber++,
                 'ERROR_LOG_ID' => $errorID
             ]);
@@ -546,6 +645,7 @@ class AiConversation implements AiConversationInterface
                     'USER' => $this->workbench->getSecurity()->getAuthenticatedUser()->getUid(),
                     'ROLE' => AiMessageTypeDataType::WARNING,
                     'MESSAGE' => $warningText,
+                    'MODEL' => $this->assistant->getConnection()->getModelName(),
                     'SEQUENCE_NUMBER' => $this->sequenceNumber++
                 ];
 
@@ -629,6 +729,7 @@ class AiConversation implements AiConversationInterface
                     'USER' => $this->workbench->getSecurity()->getAuthenticatedUser()->getUid(),
                     'ROLE' => AiMessageTypeDataType::ERROR,
                     'MESSAGE' => $errorText,
+                    'MODEL' => $this->assistant->getConnection()->getModelName(),
                     'SEQUENCE_NUMBER' => $this->sequenceNumber++
                 ];
 
@@ -873,229 +974,5 @@ class AiConversation implements AiConversationInterface
     public function getErrorMessages() : array
     {
         return $this->getMessagesByType(AiMessageTypeDataType::ERROR);
-    }
-
-    /**
-     * Loads the raw LLM response message for the most recent tool-call request.
-     *
-     * The returned array is the complete assistant message object (including the
-     * `tool_calls` array) that was stored when the LLM originally called the tool.
-     * It is needed to reconstruct the correct OpenAI message sequence when resuming
-     * a conversation after a user confirmation.
-     *
-     * @return array|null The assistant message array, or null if none found.
-     */
-    public function loadLastToolCallRequestMessage(): ?array
-    {
-        $messageSheet = DataSheetFactory::createFromObjectIdOrAlias($this->workbench, 'axenox.GenAI.AI_MESSAGE');
-        $messageSheet->getColumns()->addFromExpression('DATA');
-        $messageSheet->getFilters()->addConditionFromString('AI_CONVERSATION', $this->getConversationId());
-        $messageSheet->getFilters()->addConditionFromString('ROLE', AiMessageTypeDataType::TOOLCALLING);
-        $messageSheet->getSorters()->addFromString('SEQUENCE_NUMBER', 'DESC');
-        $messageSheet->dataRead();
-
-        if ($messageSheet->isEmpty()) {
-            return null;
-        }
-
-        $dataJson = $messageSheet->getCellValue('DATA', 0);
-        if ($dataJson === null || $dataJson === '') {
-            return null;
-        }
-
-        $data = json_decode($dataJson, true);
-        return is_array($data) ? $data : null;
-    }
-
-    /**
-     * Persists a pending tool-call confirmation in the conversation log.
-     *
-     * The stored row uses ROLE = PENDING_CONFIRMATION so it can be queried back
-     * on the next request. Only one pending confirmation per conversation is
-     * expected at a time.
-     *
-     * @param string $toolName          Name of the tool that requested confirmation.
-     * @param string $callId            LLM-assigned call ID.
-     * @param array  $args              Original named arguments passed to the tool.
-     * @param string $question          Question that was displayed to the user.
-     * @param array  $priorToolMessages Already-executed tool results from the same LLM batch
-     *                                  (tools that ran before the confirmation one).
-     *                                  Each entry: ['tool_call_id'=>…, 'toolName'=>…, 'content'=>…]
-     * @param array  $remainingToolCalls Tool calls from the same batch that have NOT yet run.
-     *                                  Each entry: ['toolName'=>…, 'callId'=>…, 'args'=>…]
-     */
-    public function savePendingConfirmation(
-        string $toolName,
-        string $callId,
-        array $args,
-        string $question,
-        array $priorToolMessages = [],
-        array $remainingToolCalls = []
-    ): void {
-        $transaction = $this->workbench->data()->startTransaction();
-        $message = DataSheetFactory::createFromObjectIdOrAlias($this->workbench, 'axenox.GenAI.AI_MESSAGE');
-
-        try {
-            $data = json_encode([
-                'toolName'           => $toolName,
-                'callId'             => $callId,
-                'args'               => $args,
-                'question'           => $question,
-                'answered'           => false,
-                'priorToolMessages'  => $priorToolMessages,
-                'remainingToolCalls' => $remainingToolCalls,
-            ], JSON_UNESCAPED_UNICODE);
-
-            $message->addRow([
-                'AI_CONVERSATION'  => $this->getConversationId(),
-                'USER'             => $this->workbench->getSecurity()->getAuthenticatedUser()->getUid(),
-                'ROLE'             => AiMessageTypeDataType::PENDING_CONFIRMATION,
-                'MESSAGE'          => $question,
-                'DATA'             => $data,
-                'SEQUENCE_NUMBER'  => $this->sequenceNumber++,
-            ]);
-
-            $message->dataCreate(false, $transaction);
-            $transaction->commit();
-        } catch (\Throwable $e) {
-            $transaction->rollback();
-            $this->workbench->getLogger()->logException($e);
-        }
-    }
-
-    /**
-     * Loads the most recent pending confirmation for this conversation.
-     *
-     * Returns an associative array with keys `toolName`, `callId`, `args` and
-     * `question`, or `null` if no unanswered pending confirmation exists.
-     *
-     * @return array{toolName:string,callId:string,args:array,question:string}|null
-     */
-    public function loadPendingConfirmation(): ?array
-    {
-        $messageSheet = DataSheetFactory::createFromObjectIdOrAlias($this->workbench, 'axenox.GenAI.AI_MESSAGE');
-        $messageSheet->getColumns()->addFromExpression('DATA');
-        $messageSheet->getFilters()->addConditionFromString('AI_CONVERSATION', $this->getConversationId());
-        $messageSheet->getFilters()->addConditionFromString('ROLE', AiMessageTypeDataType::PENDING_CONFIRMATION);
-        $messageSheet->getSorters()->addFromString('SEQUENCE_NUMBER', 'DESC');
-        $messageSheet->dataRead();
-
-        if ($messageSheet->isEmpty()) {
-            return null;
-        }
-
-        $dataJson = $messageSheet->getCellValue('DATA', 0);
-        if ($dataJson === null || $dataJson === '') {
-            return null;
-        }
-
-        $data = json_decode($dataJson, true);
-        if (! is_array($data)) {
-            return null;
-        }
-
-        // Skip confirmations that have already been answered
-        if (! empty($data['answered'])) {
-            return null;
-        }
-
-        return $data;
-    }
-
-    /**
-     * Saves all tool results from a confirmation turn as a single TOOL message.
-     *
-     * Called during the confirmation resume with every tool result from the batch:
-     * - tools that already ran before the confirmation (prior)
-     * - the confirmation tool itself (executed or declined)
-     * - tools that ran after the confirmation (remaining)
-     *
-     * @param array $toolResults  Each entry: ['toolName'=>…, 'callId'=>…, 'result'=>…]
-     */
-    public function saveConfirmationToolResults(array $toolResults): void
-    {
-        if (empty($toolResults)) {
-            return;
-        }
-
-        $transaction = $this->workbench->data()->startTransaction();
-        $message = DataSheetFactory::createFromObjectIdOrAlias($this->workbench, 'axenox.GenAI.AI_MESSAGE');
-
-        $markdown = '> **' . count($toolResults) . "** tool result(s) after confirmation:\n\n";
-        foreach ($toolResults as $i => $tr) {
-            $no = $i + 1;
-            $markdown .= "\n## {$no}. {$tr['toolName']}()\n\n";
-            $markdown .= MarkdownDataType::escapeCodeBlock($tr['result']);
-        }
-
-        try {
-            $message->addRow([
-                'AI_CONVERSATION'  => $this->getConversationId(),
-                'USER'             => $this->workbench->getSecurity()->getAuthenticatedUser()->getUid(),
-                'ROLE'             => AiMessageTypeDataType::TOOL,
-                'MESSAGE'          => $markdown,
-                'DATA'             => json_encode($toolResults, JSON_UNESCAPED_UNICODE),
-                'SEQUENCE_NUMBER'  => $this->sequenceNumber++,
-            ]);
-            $message->dataCreate(false, $transaction);
-            $transaction->commit();
-        } catch (\Throwable $e) {
-            $transaction->rollback();
-            $this->workbench->getLogger()->logException($e);
-        }
-    }
-
-    /**
-     * Records the user's answer to the most recent pending confirmation.
-     *
-     * The existing PENDING_CONFIRMATION message is marked as answered (DATA field
-     * is updated with `answered: true` and the user's choice). The user's response
-     * is additionally stored as a separate USER message so the full request–answer
-     * pair is visible in the conversation log.
-     *
-     * TODO: consider a dedicated message type (e.g. PENDING_CONFIRMATION_ANSWER)
-     * instead of USER to better separate confirmation answers from real user input.
-     *
-     * @param bool $confirmed TRUE if the user clicked "Yes", FALSE for "No".
-     */
-    public function saveConfirmationAnswer(bool $confirmed): void
-    {
-        $transaction = $this->workbench->data()->startTransaction();
-
-        try {
-            // Mark the existing PENDING_CONFIRMATION record as answered
-            $messageSheet = DataSheetFactory::createFromObjectIdOrAlias($this->workbench, 'axenox.GenAI.AI_MESSAGE');
-            $messageSheet->getColumns()->addFromAttributeGroup($messageSheet->getMetaObject()->getAttributes());
-            $messageSheet->getFilters()->addConditionFromString('AI_CONVERSATION', $this->getConversationId());
-            $messageSheet->getFilters()->addConditionFromString('ROLE', AiMessageTypeDataType::PENDING_CONFIRMATION);
-            $messageSheet->getSorters()->addFromString('SEQUENCE_NUMBER', 'DESC');
-            $messageSheet->dataRead();
-
-            if (! $messageSheet->isEmpty()) {
-                $existingDataJson = $messageSheet->getCellValue('DATA', 0) ?? '{}';
-                $existingData = json_decode($existingDataJson, true) ?: [];
-                $existingData['answered'] = true;
-                $existingData['answer']   = $confirmed ? 'confirmed' : 'cancelled';
-                $messageSheet->setCellValue('DATA', 0, json_encode($existingData, JSON_UNESCAPED_UNICODE));
-                $messageSheet->dataUpdate(false, $transaction);
-            }
-
-            // TODO: consider a dedicated message type (e.g. PENDING_CONFIRMATION_ANSWER)
-            // instead of USER to better separate confirmation answers from real user input.
-            $answerSheet = DataSheetFactory::createFromObjectIdOrAlias($this->workbench, 'axenox.GenAI.AI_MESSAGE');
-            $answerSheet->addRow([
-                'AI_CONVERSATION'  => $this->getConversationId(),
-                'USER'             => $this->workbench->getSecurity()->getAuthenticatedUser()->getUid(),
-                'ROLE'             => AiMessageTypeDataType::USER,
-                'MESSAGE'          => $confirmed ? 'confirmed' : 'cancelled',
-                'SEQUENCE_NUMBER'  => $this->sequenceNumber++,
-            ]);
-            $answerSheet->dataCreate(false, $transaction);
-
-            $transaction->commit();
-        } catch (\Throwable $e) {
-            $transaction->rollback();
-            $this->workbench->getLogger()->logException($e);
-        }
     }
 }

@@ -1,15 +1,18 @@
-The app `axenox.GenAI` adds the possibility to configure AI agents, as 
-integral parts of our apps. It provides a framework to develop, monitor and 
-test these agents. The goal is to let app designers add agents to their apps 
-easily and gradually improve them over time based on information collected 
-by the app about their use and efficiency.
+# AI agent framework for ExFace no-code platform
+
+The app `axenox.GenAI` adds the possibility to configure AI agents in the 
+ExFace platform. Read the [core intro](../../../exface/core/.github/copilot-instructions.md) 
+and follow [component-specific instructions](../../../exface/core/.github/instructions/*)
+if applicable. The goal is to let app designers add agents to their apps 
+easily and gradually improve them over time based on information 
+collected by the app about their use and efficiency.
 
 This apps adds the `Administration > AI` menu with a convenient user 
 interface to create, test and monitor agents.
 
 ## AI components
 
-The AI framework consists of these main compinents:
+The AI framework consists of these main components:
 
 - At its heart, agents having a prototype and a UXON model handle prompts 
   (similar to action tasks) and return `AIPromptResult` containers - 
@@ -22,6 +25,10 @@ The AI framework consists of these main compinents:
   concept also has a prototype and a model. Concept prototypes are easy to 
   add to apps too. In fact, using the `ToolCallConcept`, you can include any 
   tool output in the instructions right away.
+- AI skills are persisted, non-versioned building blocks that bundle optional
+   instructions, concepts, and tools. Agents reference skills by alias. Skill
+   instructions are inserted through an optional local placeholder, while skill
+   tools are loaded whether or not that placeholder is used.
 
 Messages exchanged with LLMs are tracked in Ai conversations. A complete and 
 easy to read conversation log is very important for the continuous 
@@ -87,9 +94,16 @@ more data from the Ai prompt.
 
 ## Documentation maintenance
 
+<<<<<<< HEAD
 Changes to agent, tool, or concept prototypes must include the corresponding documentation update in the same change:
 
 - Agent behavior and configuration: `Docs/AI/Agents/`
+=======
+Changes to agent, skill, tool, or concept prototypes must include the corresponding documentation update in the same change:
+
+- Agent behavior and configuration: `Docs/AI/Agents/`
+- Skill behavior and configuration: `Docs/AI/Skills/`
+>>>>>>> 189c39a05d8436be45edc3f8dfc1ca9fa48e1553
 - Tool prototypes: `Docs/AI/Tools/index.md`
 - Concept prototypes: `Docs/AI/Concepts/index.md`
 

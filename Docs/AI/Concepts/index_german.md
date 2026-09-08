@@ -104,7 +104,11 @@ Die Concept-Ausgabe wird beim Rendern des Prompts erzeugt und für diese Concept
 
 **Verwendung.** Konfigurieren Sie eine nicht leere Bedingungsgruppe `object_filters`, die ausschließlich die relevante App, den Namespace, die Verbindung oder die Objektmenge auswählt. Filter können Prompt-Eingabeplatzhalter wie `[#~input:UID#]` enthalten, wenn das Schema von der ersten Eingabezeile abhängt.
 
+<<<<<<< HEAD
 **Ergebnis und Grenzen.** Das Ergebnis ist für den Modellkontext geeignetes DBML und keine ausführbare Datenbank-DDL. Das Rendern einer breiten Auswahl erhöht den Datenbankaufwand und die Prompt-Größe. Objekte, die auf benutzerdefinierten SQL-Anweisungen basieren, lassen sich möglicherweise nicht als reguläre DBML-Tabellen darstellen.
+=======
+**Ergebnis und Grenzen.** Das Ergebnis ist für den Modellkontext geeignetes DBML und keine ausführbare Datenbank-DDL. Beziehungen werden nur zwischen Objekten innerhalb des ausgewählten Schemas ausgegeben. Das Rendern einer breiten Auswahl erhöht den Datenbankaufwand und die Prompt-Größe. Objekte, die auf benutzerdefinierten SQL-Anweisungen basieren, lassen sich möglicherweise nicht als reguläre DBML-Tabellen darstellen.
+>>>>>>> 189c39a05d8436be45edc3f8dfc1ca9fa48e1553
 
 ## `SqlDbmlConcept`
 
@@ -118,7 +122,11 @@ Die Concept-Ausgabe wird beim Rendern des Prompts erzeugt und für diese Concept
 
 **Verwendung.** Übergeben Sie dieselbe eng begrenzte Bedingungsgruppe `object_filters` wie für `MetamodelDbmlConcept`. Die Filterung nach einer Verbindung aus `[#~input:FIELD#]` ist nützlich, wenn ein KI-Chat für eine ausgewählte Datenverbindung geöffnet wird.
 
+<<<<<<< HEAD
 **Ergebnis und Grenzen.** Das Concept erzeugt DBML für unterstützte SQL-Objekte und Engines wie MySQL, MariaDB, Oracle und Microsoft SQL Server. Die Auflösung schlägt fehl, wenn keine geeigneten SQL-Objekte zur Konfiguration passen.
+=======
+**Ergebnis und Grenzen.** Das Concept verwendet denselben Renderer für physische Schemas wie `SqlDbmlTool` und erzeugt DBML für Engines wie MySQL, MariaDB, PostgreSQL, Oracle, Microsoft SQL Server und ODBC SQL. Beziehungen werden nur zwischen ausgewählten Tabellen ausgegeben. Die Auflösung schlägt fehl, wenn keine geeigneten SQL-Objekte zur Konfiguration passen.
+>>>>>>> 189c39a05d8436be45edc3f8dfc1ca9fa48e1553
 
 ## `ToolCallConcept`
 

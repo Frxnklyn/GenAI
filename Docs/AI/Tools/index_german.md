@@ -16,9 +16,25 @@ Verwenden Sie ein Tool für Informationen, die zu detailliert, zu veränderlich 
 | Einen kleinen Teil einer bestehenden Datei ändern | `FilePatchTool` |
 | Eine Datei erstellen oder vollständig ersetzen | `FileWriteTool` |
 | Einen streng kontrollierten lokalen Befehl ausführen | `CommandLineTool` |
+<<<<<<< HEAD
 | ExFace-Objektdaten lesen oder speichern | `DataSheetReadTool` oder `DataSheetImportTool` |
 | ExFace-Dokumentation lesen | `GetDocsTool` |
 | Modell- oder UXON-Metadaten untersuchen | Eines der `Model*InfoTool`-Tools |
+=======
+| Git-Änderungen und Historie untersuchen | `GitTool` |
+| PHP-Syntax validieren | `DevLintPHPTool` |
+| ExFace-Objektdaten lesen oder speichern | `DataSheetReadTool` oder `DataSheetImportTool` |
+| Registry-freigegebene Modellkomponenten referenzieren oder erstellen | `ModelComponentSaveTool` |
+| Das physische Schema einer SQL-Verbindung abrufen | `SqlDbmlTool` |
+| Objektdaten anhand eines konfigurierten Attributs finden | `ModelObjectSearchTool` |
+| Agentengedächtnis für den aktuellen Benutzer auflisten, speichern oder abrufen | `NotesListTool`, `NotesWriteTool`, `NotesSearchTool` oder `NotesReadTool` |
+| Suchen, wo Modell-Elemente referenziert sind | `ModelSearchTool` |
+| ExFace-Dokumentation lesen | `GetDocsTool` |
+| Modell- oder UXON-Metadaten untersuchen | Eines der `Model*InfoTool`-Tools |
+| Kontextabhängige UXON-Eigenschaften und Werte finden | `UxonAutosuggestTool` |
+| Erzeugtes UXON validieren | `UxonValidateTool` |
+| Menü und Bildschirme einer App verstehen | `UiOverviewTool` |
+>>>>>>> 189c39a05d8436be45edc3f8dfc1ca9fa48e1553
 | Eine konkrete Seiten- oder Widget-Instanz untersuchen | `UiWidgetInfoTool` |
 | Deterministische Testausgaben bereitstellen | `MockTool` |
 
@@ -50,7 +66,11 @@ Werden `arguments` weggelassen, kommen die integrierten Argumentvorlagen zum Ein
 
 ## Dateizugriff konfigurieren
 
+<<<<<<< HEAD
 `CommandLineTool`, `FileReadTool`, `FileWriteTool`, `FilePatchTool`, `FolderReadTool` und `FileSearchTool` verwenden gemeinsam die folgenden Eigenschaften:
+=======
+`CommandLineTool`, `GitTool`, `DevLintPHPTool`, `FileReadTool`, `FileWriteTool`, `FilePatchTool`, `FolderReadTool` und `FileSearchTool` verwenden gemeinsam die folgenden Eigenschaften:
+>>>>>>> 189c39a05d8436be45edc3f8dfc1ca9fa48e1553
 
 | Eigenschaft | Standard | Beschreibung |
 | --- | --- | --- |
@@ -85,6 +105,51 @@ Pfade werden vor dem Zugriff gegen die konfigurierte Basis und Positivliste vali
 
 **Ergebnis und Grenzen.** Das Tool gibt die erfasste Konsolenausgabe in einem Markdown-Codeblock zurück. Ungültige Befehle, abgelehnte Verzeichnisse, Fehler und Zeitüberschreitungen führen zu einem Tool-Fehler. Begrenzen Sie die Ausführungszeit und verlassen Sie sich niemals darauf, dass das Modell entscheidet, ob ein uneingeschränkter Befehl sicher ist.
 
+<<<<<<< HEAD
+=======
+## `GitTool`
+
+**Alias:** `axenox.GenAI.GitTool` | [UXON-Prototyp](api/docs/exface/Core/Docs/UXON/UXON_prototypes.md?selector=%5Caxenox%5CGenAI%5CAI%5CTools%5CGitTool)
+
+**Zweck.** Führt vordefinierte Git-Operationen in einem validierten Repository-Verzeichnis aus. Die sicheren Standardeinstellungen erlauben einem Agenten, aktuelle Änderungen und die Commit-Historie zu untersuchen, ohne dateiverändernde Operationen freizuschalten.
+
+**Verwenden, wenn.** Der Agent einen Arbeitsbaum validieren, Diffs untersuchen, frühere Arbeiten finden oder eine ältere Version einer Datei ansehen muss. Bevorzugen Sie dieses Tool für Git gegenüber dem `CommandLineTool`, da Designer Operationsnamen statt Befehlsregex konfigurieren.
+
+**Nicht verwenden, wenn.** Aktivieren Sie verändernde Operationen nur, wenn der Agent sie ausdrücklich benötigt und sein Arbeitsablauf geeignete Prüfmechanismen enthält. Die Standardkonfiguration erlaubt weder Staging und Commits noch Branch-Wechsel, Netzwerksynchronisierung oder andere Repository-Änderungen.
+
+| UXON-Eigenschaft | Standard | Beschreibung |
+| --- | --- | --- |
+| `allowed_commands` | `["status", "diff", "log", "show", "blame", "grep"]` | Vordefinierte Namen von Git-Operationen. Zusätzlich unterstützte Leseoperationen sind `rev-list`, `rev-parse`, `ls-files`, `ls-tree`, `shortlog` und `describe`. Verändernde Operationen wie `stage`, `commit`, `switch`, `pull` und `push` müssen ausdrücklich aktiviert werden. Eine leere Liste sperrt alle Befehle. |
+| `command_timeout` | `60` | Maximale Ausführungszeit in Sekunden. |
+
+| Argument | Erforderlich | Beschreibung |
+| --- | --- | --- |
+| `command` | Ja | Vollständiger Git-Befehl, der mit `git` und einer aktivierten Operation beginnt. |
+| `folder` | Nein | Repository-Verzeichnis relativ zum konfigurierten Basispfad. |
+
+**Verwendung.** Behalten Sie üblicherweise die standardmäßige Operationsliste bei und beschränken Sie `allowed_paths` auf die Repositorys, die der Agent untersuchen darf. Um eine weitere Operation freizugeben, fügen Sie ihren vordefinierten Namen zu `allowed_commands` hinzu; `stage` wird auf `git add` abgebildet. Unbekannte Namen werden als Konfigurationsfehler abgelehnt. Die erzeugten Validierungsmuster sperren Shell-Operatoren sowie Optionen, die Befehlsausgaben schreiben oder externe Diff- und Pager-Hilfsprogramme aufrufen.
+
+**Ergebnis und Grenzen.** Das Tool gibt die Git-Ausgabe in einem Markdown-Codeblock zurück. Es wandelt die Git-Ausgabe nicht in strukturierte Daten um. Ausdrücklich aktivierte verändernde Befehle behalten ihr normales Git-Verhalten und sollten nur Agenten bereitgestellt werden, die Repository-Änderungen durchführen sollen.
+
+## `DevLintPHPTool`
+
+**Alias:** `axenox.GenAI.DevLintPHPTool` | [UXON-Prototyp](api/docs/exface/Core/Docs/UXON/UXON_prototypes.md?selector=%5Caxenox%5CGenAI%5CAI%5CTools%5CDevLintPHPTool)
+
+**Zweck.** Validiert eine PHP-Datei mit dem eingebauten Lint-Modus der aktuellen PHP-Laufzeit, ohne die Datei auszuführen.
+
+**Verwenden, wenn.** Ein autonomer Entwicklungsagent eine PHP-Datei erstellt oder verändert hat. Führen Sie das Tool aus, bevor die Änderung als abgeschlossen gilt, um Syntaxfehler schnell und lokal zu erkennen.
+
+**Nicht verwenden, wenn.** PHP-Lint prüft ausschließlich die Syntax. Das Tool validiert weder Typen, Abhängigkeiten und Coding-Standards noch Tests oder Laufzeitverhalten und akzeptiert kein JavaScript oder andere Dateitypen.
+
+| Argument | Erforderlich | Beschreibung |
+| --- | --- | --- |
+| `path` | Ja | Pfad zu einer `.php`-Datei relativ zum konfigurierten Basispfad. |
+
+**Verwendung.** Beschränken Sie `allowed_paths` auf die Quellbäume, die der Agent validieren darf. Das Tool legt das ausführbare Programm und die Lint-Option intern fest; das Modell kann nur einen validierten relativen Dateipfad übergeben und keine PHP- oder Shell-Optionen ergänzen.
+
+**Ergebnis und Grenzen.** Das Tool gibt die PHP-Lint-Ausgabe in einem Markdown-Codeblock zurück. Ein Syntaxfehler ist ein normales Diagnoseergebnis, damit der Agent ihn beheben kann. Fehlende, nicht lesbare, abgelehnte und Nicht-PHP-Dateien erzeugen einen Tool-Fehler, ebenso ein Fehler beim Starten des PHP-Prozesses.
+
+>>>>>>> 189c39a05d8436be45edc3f8dfc1ca9fa48e1553
 ## `FileReadTool`
 
 **Alias:** `axenox.GenAI.FileReadTool` | [UXON-Prototyp](api/docs/exface/Core/Docs/UXON/UXON_prototypes.md?selector=%5Caxenox%5CGenAI%5CAI%5CTools%5CFileReadTool)
@@ -144,11 +209,16 @@ Pfade werden vor dem Zugriff gegen die konfigurierte Basis und Positivliste vali
 | `patch` | Ja | Patch mit exakten Such- und Ersetzungsblöcken. |
 
 ```text
+<<<<<<< HEAD
 <<<<<<< SEARCH
 exact text, including whitespace
 =======
 replacement text
 >>>>>>> REPLACE
+=======
+exact text, including whitespace
+replacement text
+>>>>>>> 189c39a05d8436be45edc3f8dfc1ca9fa48e1553
 ```
 
 **Verwendung.** Das Modell übergibt einen relativen Pfad und einen oder mehrere Patch-Blöcke. Beim Suchtext wird zwischen Groß- und Kleinschreibung unterschieden und Leerraum exakt berücksichtigt. Daher sollte jeder Block aus der aktuellen Datei kopiert, klein genug für eine einfache Prüfung und zugleich eindeutig genug zur Identifikation genau einer Stelle sein. Ein leerer Suchabschnitt kann eine Datei erstellen oder Inhalt anhängen.
@@ -202,6 +272,28 @@ replacement text
 
 **Ergebnis und Grenzen.** Das Ergebnis listet passende Pfade und bei Bedarf Auszüge passender Zeilen auf. Vermeiden Sie eine unbegrenzte `**`-Suche ab dem Vendor-Stammverzeichnis. Engere Pfade reduzieren Ausführungszeit, Festplattenzugriffe und Antwortgröße.
 
+<<<<<<< HEAD
+=======
+## `SqlDbmlTool`
+
+**Alias:** `axenox.GenAI.SqlDbmlTool` | [UXON-Prototyp](api/docs/exface/Core/Docs/UXON/UXON_prototypes.md?selector=%5Caxenox%5CGenAI%5CAI%5CTools%5CSqlDbmlTool)
+
+**Zweck.** Erzeugt ein physisches DBML-Schema aus den tabellenartigen ExFace-Metaobjekten, die einer SQL-Datenverbindung zugeordnet sind.
+
+**Verwenden, wenn.** Ein Agent Tabellennamen, Spaltennamen, Datentypen, Enum-Werte und Beziehungen einer Verbindung nur bei Bedarf benötigt. Dadurch muss ein möglicherweise großes Schema nicht über `SqlDbmlConcept` in jeden Prompt eingefügt werden.
+
+**Nicht verwenden, wenn.** Verwenden Sie es nicht für Nicht-SQL-Verbindungen, auf benutzerdefinierten SQL-Anweisungen basierende Objekte oder ausführbare DDL. Nutzen Sie `MetamodelDbmlConcept`, wenn konzeptionelle Metaobjektnamen in jedem Prompt benötigt werden.
+
+| Argument | Erforderlich | Beschreibung |
+| --- | --- | --- |
+| `connection` | Ja | UID oder namespaced Alias der SQL-Datenverbindung. |
+| `data_address_search` | Nein | Text, nach dem ohne Beachtung der Groß-/Kleinschreibung in Metaobjekt-Datenadressen gesucht wird. |
+
+**Verwendung.** Übergeben Sie UID oder Alias der konfigurierten Verbindung. Lassen Sie `data_address_search` weg, um alle tabellenartigen Objekte der Verbindung abzurufen. Um ein großes Schema einzuschränken, übergeben Sie Text, der in den physischen Tabellenadressen enthalten ist: Beispielsweise wählt `dbo.` Objekte im Schema `dbo` aus und `order_` Objekte, deren Adressen dieses Tabellennamenfragment enthalten.
+
+**Ergebnis und Grenzen.** Das Ergebnis ist DBML mit vorangestellter erkannter SQL-Engine. Beziehungen werden nur ausgegeben, wenn beide Objekte im Ergebnis enthalten sind. Fehlende Verbindungen, Nicht-SQL-Verbindungen und Auswahlen ohne passende Tabellenobjekte erzeugen einen Tool-Fehler. Das Tool liest das ExFace-Metamodell und untersucht nicht das Live-Datenbankschema.
+
+>>>>>>> 189c39a05d8436be45edc3f8dfc1ca9fa48e1553
 ## `DataSheetReadTool`
 
 **Alias:** `axenox.GenAI.DataSheetReadTool` | [UXON-Prototyp](api/docs/exface/Core/Docs/UXON/UXON_prototypes.md?selector=%5Caxenox%5CGenAI%5CAI%5CTools%5CDataSheetReadTool)
@@ -238,6 +330,47 @@ replacement text
 
 **Ergebnis und Grenzen.** Das Ergebnis enthält JSON-formatierte Zeilen und Metadaten in Markdown. Es gelten die üblichen ExFace-Objektberechtigungen und DataSheet-Lesebeschränkungen. Ungültige Objektaliasse, Ausdrücke oder Filter führen zu Fehlern.
 
+<<<<<<< HEAD
+=======
+**Konfiguration.** Das Tool stellt drei UXON-Eigenschaften zur Steuerung von Format und Kontext bereit:
+
+| UXON-Eigenschaft | Typ | Standard | Beschreibung |
+| --- | --- | --- | --- |
+| `output_mode` | enum | `markdown_table` | Einer von `markdown_table`, `markdown` oder `json`. |
+| `header_level` | integer | `2` | Markdown-Überschriftenebene für die Abschnittsüberschriften, zulässiger Bereich 1-6. Ungültige Werte erzeugen eine Warnung und fallen auf `2` zurück. |
+| `include_object_description` | boolean | `true` bei `markdown_table`, sonst `false` | Fügt nach den Daten einen kurzen Objektbeschreibungsblock hinzu, sofern verfügbar. |
+
+**Ausgabemodi.** Das Tool unterstützt drei Renderings: `markdown_table` (Standard), `markdown` und `json`. `markdown_table` eignet sich am besten für Mehrzeilergebnisse. `markdown` wechselt auf eine Datensatz-für-Datensatz-Zusammenfassung für leere, einzeilige oder breite Ergebnisse, wenn eine kompakte Tabelle keine klare Darstellung mehr ist.
+
+**Rückgabewert.** Das Tool liefert einen String, der durch `renderOutput()` erzeugt wird. Die Ausgabe beginnt immer mit einem kurzen Satz wie `Read data of object ...`, gefolgt vom gewählten Payload (`markdown_table`, `markdown` oder `json`) und optional einem Objektbeschreibungsblock, wenn das aktiviert ist.
+
+**Warnungen und behebbare Fehler.** Nicht unterstützte oder ungültige Konfigurationen werden als Warnungen behandelt, nicht als harte Fehler. Das Tool fällt auf den sicheren Standardwert zurück und setzt die Antwort fort. Leere Ergebnismengen erzeugen ebenfalls eine Warnung; das Rendern der Objektbeschreibung wird bei Fehlern abgefangen und als Warnung geloggt, ohne das Tool-Ergebnis zu brechen.
+
+## `ModelObjectSearchTool`
+
+**Alias:** `axenox.GenAI.ModelObjectSearchTool` | [UXON-Prototyp](api/docs/exface/Core/Docs/UXON/UXON_prototypes.md?selector=%5Caxenox%5CGenAI%5CAI%5CTools%5CModelObjectSearchTool)
+
+**Zweck.** Durchsucht das in `data_sheet` konfigurierte Objekt anhand der ersten konfigurierten Spalte. Standardmäßig wird `exface.Core.OBJECT` anhand von `NAME` durchsucht.
+
+**Verwenden, wenn.** Der Agent eine kompakte Liste von Zeilen benötigt, die zu einem vom Benutzer vorgegebenen Wert in einem festgelegten Attribut passen.
+
+**Nicht verwenden, wenn.** Verwenden Sie es nicht für erweiterte Modellanalyse oder Alias-/UID-Suche über viele Kriterien. Nutzen Sie `ModelObjectInfoTool` oder `DataSheetReadTool` für umfassendere Abfragen.
+
+| UXON-Eigenschaft | Standard | Beschreibung |
+| --- | --- | --- |
+| `data_sheet` | `exface.Core.OBJECT` mit `NAME` als erster Spalte | Vollständige DataSheet-UXON für das durchsuchte Objekt und die zurückgegebenen Attribute. Die erste Spalte ist das Suchattribut. Sie kann außerdem zusätzliche Filter, Sortierungen und ein Zeilenlimit enthalten. |
+
+| Argument | Erforderlich | Beschreibung |
+| --- | --- | --- |
+| `object_name` | Ja | Wert, der exakt mit der ersten konfigurierten DataSheet-Spalte verglichen wird. |
+
+**Standard-Suchkonfiguration.** Die erste konfigurierte Spalte wird immer als Suchattribut verwendet und ebenfalls im Ergebnis zurückgegeben. Das Standardobjekt ist `exface.Core.OBJECT`; seine erste Spalte und sein Suchattribut ist `NAME`. Die weiteren standardmäßig zurückgegebenen Attribute sind `UID`, `ALIAS`, `ALIAS_WITH_NS`, `LABEL`, `SHORT_DESCRIPTION`, `APP`, `READABLE_FLAG`, `WRITABLE_FLAG`, `DATA_SOURCE`, `PARENT_OBJECT`, `HAS_DEFAULT_EDITOR` und `INHERIT_DATA_SOURCE_BASE_OBJECT`.
+
+**Verwendung.** Setzen Sie das zu durchsuchende Attribut an die erste Stelle in `data_sheet.columns`, gefolgt von allen weiteren zurückzugebenden Attributen. Übergeben Sie seinen Suchwert in `object_name`. Eine DataSheet für `axenox.GenAI.AI_AGENT`, die mit `NAME` beginnt, sucht beispielsweise Agenten nach Namen; beginnt sie mit `UID`, sucht sie nach UID. In der DataSheet konfigurierte Filter werden zusätzlich zu diesem erzeugten Suchfilter angewendet. Lesevorgänge sind auf 100 Zeilen begrenzt. `ToolIntroductionConcept` listet für jede konfigurierte Instanz das effektive Suchobjekt, das Suchattribut der ersten Spalte und die zurückgegebenen Attribute oder Ausdrücke auf.
+
+**Ergebnis und Grenzen.** Das Tool gibt die konfigurierten DataSheet-Spalten als Markdown-Tabelle zurück. Die verfügbaren Spalten hängen vom Metamodell des konfigurierten Objekts ab. Leere Treffer werden als Warnhinweis zurückgegeben.
+
+>>>>>>> 189c39a05d8436be45edc3f8dfc1ca9fa48e1553
 ## `DataSheetImportTool`
 
 **Alias:** `axenox.GenAI.DataSheetImportTool` | [UXON-Prototyp](api/docs/exface/Core/Docs/UXON/UXON_prototypes.md?selector=%5Caxenox%5CGenAI%5CAI%5CTools%5CDataSheetImportTool)
@@ -261,6 +394,95 @@ replacement text
 
 **Ergebnis und Grenzen.** Das Tool verwendet den regulären DataSheet-Speichervorgang und gibt die Anzahl importierter Zeilen zurück. ExFace-Autorisierung und -Validierung bleiben aktiv. Ungültige Zeilen werden, sofern die Verarbeitung fortgesetzt werden kann, als Exceptions gemeldet; kritische Fehler brechen den Import ab.
 
+<<<<<<< HEAD
+=======
+## `NotesListTool`
+
+**Alias:** `axenox.GenAI.NotesListTool` | [UXON-Prototyp](api/docs/exface/Core/Docs/UXON/UXON_prototypes.md?selector=%5Caxenox%5CGenAI%5CAI%5CTools%5CNotesListTool)
+
+**Zweck.** Listet Typen und Themen aller langfristigen Notizen für den aufrufenden Agenten und den authentifizierten Benutzer auf, ohne deren Inhalte offenzulegen.
+
+**Verwenden, wenn.** Der Agent einen kompakten Überblick über seine verfügbaren Notizen benötigt, beispielsweise als Prompt-Kontext vor der Entscheidung über eine gezielte Suche. Das Tool besitzt keine Argumente.
+
+**Ergebnis und Grenzen.** Gibt eine nach Typ und Thema sortierte Markdown-Tabelle mit den Spalten `Type` und `Topic` zurück. Benutzer- und Agentenfilter werden immer aus der aktuellen Anfrage abgeleitet und können nicht vom Modell übergeben werden. Notiztexte und UIDs werden weder gelesen noch zurückgegeben.
+
+## `ModelComponentSaveTool`
+
+**Alias:** `axenox.GenAI.ModelComponentSaveTool` | [UXON-Prototyp](api/docs/exface/Core/Docs/UXON/UXON_prototypes.md?selector=%5Caxenox%5CGenAI%5CAI%5CTools%5CModelComponentSaveTool)
+
+**Zweck.** Referenziert vorhandene Modellkomponenten über ihre UID oder erstellt neue Komponenten anhand der freigegebenen DataSheet-Templates in der Core-Komponenten-Registry.
+
+**Verwenden, wenn.** Ein Agent Konfiguration erzeugt, die vorhandene Komponenten wiederverwenden und fehlende Komponenten neu anlegen kann, während Core die erlaubten Komponentenfelder zentral vorgibt.
+
+**Nicht verwenden, wenn.** Verwenden Sie dieses Tool nicht zum Bearbeiten oder Löschen vorhandener Komponenten. Eine übergebene UID wird validiert und unverändert als Referenz zurückgegeben.
+
+| Argument | Erforderlich | Beschreibung |
+| --- | --- | --- |
+| `components` | Ja | Liste von Komponentenoperationen. Jeder Eintrag enthält `component` und entweder `uid` für eine vorhandene Referenz oder `data_sheet` für eine neue Komponente. |
+
+**Schemaquelle.** Das Tool bietet nur Komponententypen mit `save_component_data` in `ComponentRegistry.config.json` an. Das JSON Schema der Argumente wird über `DataSheetSchema` aus diesen Templates erzeugt. Konfigurierte Spalten sind verbindlich; nur eine vollständig fehlende `columns`-Eigenschaft aktiviert den Metamodell-Fallback.
+
+**Schreibsicherheit.** Das Tool baut jedes zu speichernde DataSheet neu aus dem vertrauenswürdigen Registry-Template auf und übernimmt ausschließlich validierte Zeilen. Vom Modell gelieferte Spalten, Filter oder abweichende Objektaliase werden abgelehnt. Verschachtelte Daten werden rekursiv anhand des jeweiligen `nested_data`-Templates aufgebaut. Alle neuen Komponenten eines Aufrufs verwenden eine gemeinsame Transaktion und werden bei einem Fehler gemeinsam zurückgerollt.
+
+**Ergebnis.** Das JSON-Ergebnis nennt für jede Komponente den Status `referenced` oder `created` und die zugehörigen UIDs. Vorhandene Referenzen werden gegen das in der Registry festgelegte Metaobjekt geprüft, aber niemals aktualisiert.
+
+## `NotesWriteTool`
+
+**Alias:** `axenox.GenAI.NotesWriteTool` | [UXON-Prototyp](api/docs/exface/Core/Docs/UXON/UXON_prototypes.md?selector=%5Caxenox%5CGenAI%5CAI%5CTools%5CNotesWriteTool)
+
+**Zweck.** Speichert eine typisierte langfristige Notiz für den aufrufenden Agenten und den authentifizierten Benutzer. Erinnerungen halten wiederverwendbaren Kontext fest; Vorschläge dokumentieren mögliche Verbesserungen, fehlende Tools oder andere Optimierungsmöglichkeiten für die Arbeit an einem Thema.
+
+**Verwenden, wenn.** Ein Agent eine beständige Präferenz, Entscheidung oder andere wiederverwendbare Information über mehrere Unterhaltungen hinweg behalten soll. Verwenden Sie ein kurzes, stabiles Thema, damit spätere Schreibvorgänge die Notiz über ein exakt übereinstimmendes Thema ersetzen können, oder übergeben Sie die von einem Notiz-Tool gelieferte UID, um eine bekannte Notiz gezielt zu überschreiben.
+
+**Nicht verwenden, wenn.** Speichern Sie keine Geheimnisse, vorübergehenden Gesprächsdetails oder Informationen, deren dauerhafte Speicherung der Benutzer weder angefordert hat noch erwarten würde.
+
+| Argument | Erforderlich | Beschreibung |
+| --- | --- | --- |
+| `topic` | Ja | Kurzes Thema, das die Notiz innerhalb des aktuellen Benutzer- und Agentenbereichs identifiziert. |
+| `note` | Ja | Vollständiger Notiztext. Er ersetzt den bestehenden Text, wenn das Thema bereits vorhanden ist. |
+| `uid` | Nein | UID einer bekannten Notiz, die gezielt überschrieben werden soll. Die Notiz muss zum aktuellen Benutzer und Agenten gehören. |
+| `type` | Nein | `memory` (Standardwert) für wiederverwendbaren Kontext oder `suggestion` für mögliche Verbesserungen und fehlende Fähigkeiten. |
+
+**Ergebnis und Grenzen.** Wenn `uid` übergeben wird, überschreibt das Tool die passende Notiz im aktuellen Bereich mit dem übergebenen Thema und Text; eine unbekannte oder nicht zum Bereich gehörende UID erzeugt einen Nicht-gefunden-Fehler. Ohne `uid` aktualisiert das Tool eine exakte Themenübereinstimmung oder erstellt eine neue Notiz. Aktualisierungen enthalten alle mit der Notiz gelesenen Systemattribute, damit Zeitstempel-Konfliktprüfungen aktiv bleiben. Das Tool gibt die UID der gespeicherten Notiz zurück. Benutzer- und Agenten-UID werden aus der aktuellen Anfrage abgeleitet und können vom Modell nicht übergeben werden.
+
+## `NotesReadTool`
+
+**Alias:** `axenox.GenAI.NotesReadTool` | [UXON-Prototyp](api/docs/exface/Core/Docs/UXON/UXON_prototypes.md?selector=%5Caxenox%5CGenAI%5CAI%5CTools%5CNotesReadTool)
+
+**Zweck.** Liest eine langfristige Notiz anhand ihrer UID für den aufrufenden Agenten und den authentifizierten Benutzer.
+
+**Verwenden, wenn.** `NotesSearchTool` oder `NotesWriteTool` eine Notiz-UID geliefert hat und der Agent das vollständige Thema und den Text benötigt.
+
+**Nicht verwenden, wenn.** Erraten Sie keine UIDs und verwenden Sie dieses Tool nicht zum Ermitteln von Notizen. Suchen Sie zuerst, wenn die relevante UID unbekannt ist.
+
+| Argument | Erforderlich | Beschreibung |
+| --- | --- | --- |
+| `note_uid` | Ja | UID der zu lesenden Notiz. |
+
+**Ergebnis und Grenzen.** Das Ergebnis enthält Typ, Thema und vollständigen Notiztext als Markdown. Die Abfrage enthält immer verborgene Benutzer- und Agentenfilter. Fehlende und nicht zum Bereich gehörende UIDs erzeugen denselben Nicht-gefunden-Fehler, um Informationslecks zu verhindern.
+
+## `NotesSearchTool`
+
+**Alias:** `axenox.GenAI.NotesSearchTool` | [UXON-Prototyp](api/docs/exface/Core/Docs/UXON/UXON_prototypes.md?selector=%5Caxenox%5CGenAI%5CAI%5CTools%5CNotesSearchTool)
+
+**Zweck.** Durchsucht Themen und Texte langfristiger Notizen für den aufrufenden Agenten und den authentifizierten Benutzer.
+
+**Verwenden, wenn.** Der Agent vor einer Antwort oder Aktualisierung feststellen muss, ob ein relevantes Gedächtnis vorhanden ist.
+
+**Nicht verwenden, wenn.** Ist eine Notiz-UID bereits bekannt, verwenden Sie direkt `NotesReadTool`.
+
+| Konfiguration | Standardwert | Beschreibung |
+| --- | --- | --- |
+| `excerpt_length` | `300` | Maximale Anzahl an Zeichen des Notiztextes in jedem Treffer. Muss größer als null sein. |
+
+| Argument | Erforderlich | Beschreibung |
+| --- | --- | --- |
+| `query` | Nein | Text, der in Notizthemen oder Notiztexten gesucht wird. Leer lassen, um alle Notizen zurückzugeben. |
+| `type` | Nein | `all` (Standardwert), `memory` oder `suggestion`. Konkrete Typen schränken die Suchergebnisse ein. |
+
+**Ergebnis und Grenzen.** Jeder Treffer enthält UID, Typ, Thema und einen durch `excerpt_length` begrenzten einzeiligen Auszug. Wenn der Suchtext wörtlich im Notiztext vorkommt, wird der Auszug um ihn herum gebildet. So kann das Modell die relevante UID auswählen, bevor es den vollständigen Inhalt mit `NotesReadTool` lädt. Das Tool durchsucht niemals Notizen eines anderen Benutzers oder Agenten.
+
+>>>>>>> 189c39a05d8436be45edc3f8dfc1ca9fa48e1553
 ## `GetTimeTool`
 
 **Alias:** `axenox.GenAI.GetTimeTool` | [UXON-Prototyp](api/docs/exface/Core/Docs/UXON/UXON_prototypes.md?selector=%5Caxenox%5CGenAI%5CAI%5CTools%5CGetTimeTool)
@@ -346,6 +568,32 @@ replacement text
 
 **Ergebnis und Grenzen.** Exakte Treffer werden zuerst ausgegeben, gefolgt von erzeugtem Markdown für jeden Treffer. Allgemeine Begriffe können mehrere Objekte zurückgeben; verwenden Sie daher den spezifischsten bekannten Selektor.
 
+<<<<<<< HEAD
+=======
+## `ModelSearchTool`
+
+**Alias:** `axenox.GenAI.ModelSearchTool` | [UXON-Prototyp](api/docs/exface/Core/Docs/UXON/UXON_prototypes.md?selector=%5Caxenox%5CGenAI%5CAI%5CTools%5CModelSearchTool)
+
+**Zweck.** Durchsucht das ExFace-Metamodell nach Verwendungsstellen und Referenzen über das vordefinierte Objekt `exface.Core.SEARCH_RESULT`.
+
+**Verwenden, wenn.** Der Agent herausfinden soll, wo ein Objektalias, Aktionsalias, Seitenalias oder ein anderer Modellbegriff in Model-UXON verwendet wird.
+
+**Nicht verwenden, wenn.** Verwenden Sie das Tool nicht für allgemeine Business-Datenabfragen. Nutzen Sie `DataSheetReadTool`, wenn Sie ein frei konfigurierbares Objekt oder abweichende Spalten benötigen.
+
+| Argument | Erforderlich | Beschreibung |
+| --- | --- | --- |
+| `search_query` | Ja | Suchbegriff für die Modellsuche. |
+| `object_type` | Nein | Optionaler Typfilter wie `exf_object`, `exf_attribute`, `exf_page` oder `exf_object_action`. |
+| `rows_limit` | Nein | Optionale maximale Zeilenanzahl. Standard ist `50`. |
+| `rows_offset` | Nein | Optionaler Pagination-Offset. Standard ist `0`. |
+
+**Verwendung.** Das Tool kapselt `DataSheetReadTool` und setzt `object_alias`, Spalten und den UXON-Suchfilter bereits vordefiniert. Sie übergeben nur den Suchbegriff und optional einschränkende Argumente.
+
+**So sieht es aus.** Die KI gibt einen Suchbegriff ein, zum Beispiel `search_query = "\"exface.Core.USER\""`, und bekommt dazu passende Verwendungs-Trefferzeilen zurück.
+
+**Ergebnis und Grenzen.** Das Ergebnis wird wie bei `DataSheetReadTool` als Markdown zurückgegeben und enthält Treffer mit Kontextfeldern wie Objektname, Instanzname und Instanzalias.
+
+>>>>>>> 189c39a05d8436be45edc3f8dfc1ca9fa48e1553
 ## `ModelComponentInfoTool`
 
 **Alias:** `axenox.GenAI.ModelComponentInfoTool` | [UXON-Prototyp](api/docs/exface/Core/Docs/UXON/UXON_prototypes.md?selector=%5Caxenox%5CGenAI%5CAI%5CTools%5CModelComponentInfoTool)
@@ -365,9 +613,40 @@ replacement text
 
 **Ergebnis und Grenzen.** Das Ergebnis ist die von der Komponenten-Registry zurückgegebene Dokumentation. Unbekannte Komponententypen oder Selektoren können nicht aufgelöst werden.
 
+<<<<<<< HEAD
 ## `ModelUxonPrototypeTool`
 
 **Alias:** `axenox.GenAI.ModelUxonPrototypeTool` | [UXON-Prototyp](api/docs/exface/Core/Docs/UXON/UXON_prototypes.md?selector=%5Caxenox%5CGenAI%5CAI%5CTools%5CModelUxonPrototypeTool)
+=======
+## `ModelPrototypeSearchTool`
+
+**Alias:** `axenox.GenAI.ModelPrototypeSearchTool` | [UXON-Prototyp](api/docs/exface/Core/Docs/UXON/UXON_prototypes.md?selector=%5Caxenox%5CGenAI%5CAI%5CTools%5CModelPrototypeSearchTool)
+
+**Zweck.** Sucht UXON-Prototypklassen eines Komponententyps anhand ihres Alias.
+
+**Verwenden, wenn.** Der Agent die Art der Komponente kennt, beispielsweise Aktion, Behavior oder Datentyp, aber den Prototypselektor ermitteln muss, bevor er UXON erstellt.
+
+**Nicht verwenden, wenn.** Ist die PHP-Klasse oder der Pfad zur Prototypdatei bereits bekannt, verwenden Sie direkt `ModelPrototypeInfoTool`.
+
+| UXON-Eigenschaft | Standard | Beschreibung |
+| --- | --- | --- |
+| `include_prototype_info_if_not_more_results_than` | `1` | Hängt automatisch die Ausgabe von `ModelPrototypeInfoTool` an, wenn die Suche höchstens so viele Treffer liefert. Mit `0` wird die Erweiterung deaktiviert. |
+
+| Argument | Erforderlich | Beschreibung |
+| --- | --- | --- |
+| `search_query` | Ja | Prototypalias ohne Namespace. |
+| `component` | Ja | Durchsuchbarer Komponententyp, beispielsweise `action`, `behavior` oder `data_type`. |
+| `rows_limit` | Nein | Optionale maximale Zeilenanzahl. Standard ist `50`. |
+| `rows_offset` | Nein | Optionaler Pagination-Offset. Standard ist `0`. |
+
+**Verwendung.** Übergeben Sie einen Komponententyp und das spezifischste bekannte Aliasfragment. Standardmäßig enthält ein einzelner Treffer sowohl die Suchzeile als auch die UXON-Dokumentation des Prototyps, sodass kein zweiter Tool-Aufruf erforderlich ist.
+
+**Ergebnis und Grenzen.** Das Ergebnis ist eine Markdown-Tabelle mit Prototypselektoren. Wird der konfigurierte Trefferschwellwert eingehalten, wird die zugehörige UXON-Prototypdokumentation angehängt. Breite Suchen geben nur die Tabelle zurück, sofern der Schwellwert nicht erhöht wurde.
+
+## `ModelPrototypeInfoTool`
+
+**Alias:** `axenox.GenAI.ModelPrototypeInfoTool` | [UXON-Prototyp](api/docs/exface/Core/Docs/UXON/UXON_prototypes.md?selector=%5Caxenox%5CGenAI%5CAI%5CTools%5CModelPrototypeInfoTool)
+>>>>>>> 189c39a05d8436be45edc3f8dfc1ca9fa48e1553
 
 **Zweck.** Erzeugt Dokumentation für die konfigurierbaren UXON-Eigenschaften eines PHP-Prototyps.
 
@@ -383,6 +662,54 @@ replacement text
 
 **Ergebnis und Grenzen.** `UxonPrototypeMarkdownPrinter` gibt die Prototypbeschreibung und indizierte UXON-Eigenschaften zurück. Die Qualität des Ergebnisses hängt davon ab, ob die Annotationen des Prototyps im Modell verfügbar sind.
 
+<<<<<<< HEAD
+=======
+## `UxonAutosuggestTool`
+
+**Alias:** `axenox.GenAI.UxonAutosuggestTool` | [UXON-Prototyp](api/docs/exface/Core/Docs/UXON/UXON_prototypes.md?selector=%5Caxenox%5CGenAI%5CAI%5CTools%5CUxonAutosuggestTool)
+
+**Zweck.** Gibt dieselben kontextabhängigen Eigenschaftsnamen, Werte, Vorlagen, Presets, Details und Modelleinträge zurück wie die Autosuggest-Funktion des UXON-Editors.
+
+**Verwenden, wenn.** Ein Agent UXON erstellt oder bearbeitet und gültige Eigenschaften oder Werte für einen bestimmten Knoten ermitteln muss. Das Tool ist besonders hilfreich vor dem Erzeugen von Attributen, Relationen, Komponenten-Aliassen, Enum-Werten oder verschachtelten UXON-Strukturen.
+
+**Nicht verwenden, wenn.** Verwenden Sie Autosuggest nicht als abschließende Validierung und gehen Sie nicht davon aus, dass jeder Vorschlag außerhalb des übergebenen Kontexts gültig ist. Verwenden Sie nach dem Zusammenstellen des UXON das `UxonValidateTool`.
+
+| Argument | Erforderlich | Beschreibung |
+| --- | --- | --- |
+| `uxon` | Ja | Vollständiges UXON-Objekt, das bearbeitet wird. |
+| `path` | Ja | Array aus Eigenschaftsnamen und Array-Indizes vom Wurzelknoten bis zum bearbeiteten Knoten. |
+| `input` | Ja | Vorschlagstyp: `field`, `value`, `preset`, `details` oder `modelbrowser`. |
+| `text` | Nein | Bisher eingegebener Text zum Filtern von Wert- und Model-Browser-Vorschlägen. |
+| `object` | Nein | Alias oder UID des Wurzel-Metaobjekts, das den Objektkontext bereitstellt. |
+| `prototype` | Nein | Vollqualifizierte Wurzel-Prototypklasse oder PHP-Dateipfad relativ zum Vendor-Verzeichnis. |
+| `schema` | Nein | UXON-Schemaklasse oder Schemaname zur Interpretation des UXON. |
+
+**Verwendung.** Übergeben Sie das vollständige aktuelle UXON, da Eigenschaften auf derselben oder einer übergeordneten Ebene den zutreffenden Prototyp und gültige Werte bestimmen können. Verwenden Sie `field` für Eigenschaftsnamen und Vorlagen sowie `value` für Werte der durch `path` adressierten Eigenschaft. `preset` liefert vordefinierte Strukturen, `details` Eigenschaftsdokumentation und `modelbrowser` strukturierte Metamodell-Einträge. Geben Sie verlässlichen Objekt- und Prototypkontext an, wann immer dieser verfügbar ist.
+
+**Ergebnis und Grenzen.** Das Ergebnis ist das vom Core-Action `UxonAutosuggest` erzeugte JSON. Feldvorschläge enthalten `values` und `templates`, Wertvorschläge enthalten `values`; Preset-, Detail- und Model-Browser-Aufrufe liefern modusspezifische Strukturen. Leere Vorschläge können bedeuten, dass für den übergebenen Kontext kein Wert bekannt ist. Fehler des Actions werden als Tool-Fehler zurückgegeben.
+
+## `UxonValidateTool`
+
+**Alias:** `axenox.GenAI.UxonValidateTool` | [UXON-Prototyp](api/docs/exface/Core/Docs/UXON/UXON_prototypes.md?selector=%5Caxenox%5CGenAI%5CAI%5CTools%5CUxonValidateTool)
+
+**Zweck.** Validiert erzeugtes UXON und gibt strukturierte Diagnosen zurück, mit denen ein Agent wahrscheinliche Konfigurationsfehler korrigieren kann.
+
+**Verwenden, wenn.** Ein Agent UXON für ein Widget, eine Aktion, ein Behavior, einen Connector oder einen anderen konfigurierbaren Prototyp erstellt oder verändert hat. Rufen Sie das Tool vor der Rückgabe oder Anwendung des UXON auf, wenn das relevante Schema oder der Prototypkontext bekannt ist.
+
+**Nicht verwenden, wenn.** Behandeln Sie das Ergebnis nicht als verbindliche Laufzeitvalidierung. Der Validator erzeugt Modellkomponenten als Attrappen und kann dadurch Fehlalarme melden oder kontextabhängige Fehler übersehen.
+
+| Argument | Erforderlich | Beschreibung |
+| --- | --- | --- |
+| `uxon` | Ja | Zu validierendes UXON-Objekt. |
+| `schema` | Nein | UXON-Schemaklasse oder Schemaname zur Interpretation des UXON. |
+| `object` | Nein | Alias oder UID des Wurzel-Metaobjekts, das den Objektkontext bereitstellt. |
+| `prototype` | Nein | Vollqualifizierte Wurzel-Prototypklasse oder PHP-Dateipfad relativ zum Vendor-Verzeichnis. |
+
+**Verwendung.** Übergeben Sie das erzeugte UXON und so viel verlässlichen Kontext wie verfügbar. Ein Prototyp kann als `\exface\Core\Widgets\DataTable` oder `exface/core/Widgets/DataTable.php` angegeben werden. Der explizite Tool-Aufruf führt die Validierung immer aus und wird nicht durch die vom Editor-Action verwendete Einstellung `DEBUG.AUTOMATIC_UXON_VALIDATION` deaktiviert.
+
+**Ergebnis und Grenzen.** Das Ergebnis ist ein JSON-Array aus Objekten mit den Eigenschaften `path` und `message`. Ein leeres Array bedeutet, dass keine Probleme erkannt wurden, nicht dass das UXON garantiert funktioniert. Ungültige Tool-Eingaben oder ein Fehler des Validators werden als Tool-Fehler zurückgegeben.
+
+>>>>>>> 189c39a05d8436be45edc3f8dfc1ca9fa48e1553
 ## `ModelWidgetTypeInfoTool`
 
 **Alias:** `axenox.GenAI.ModelWidgetTypeInfoTool` | [UXON-Prototyp](api/docs/exface/Core/Docs/UXON/UXON_prototypes.md?selector=%5Caxenox%5CGenAI%5CAI%5CTools%5CModelWidgetTypeInfoTool)
@@ -401,6 +728,28 @@ replacement text
 
 **Ergebnis und Grenzen.** Das Tool kombiniert indizierte UXON-Annotationen mit Metadaten zu Widget-Funktionen und Presets. Fehlende oder unvollständige Modellannotationen führen zu unvollständiger Dokumentation.
 
+<<<<<<< HEAD
+=======
+## `UiOverviewTool`
+
+**Alias:** `axenox.GenAI.UiOverviewTool` | [UXON-Prototyp](api/docs/exface/Core/Docs/UXON/UXON_prototypes.md?selector=%5Caxenox%5CGenAI%5CAI%5CTools%5CUiOverviewTool)
+
+**Zweck.** Erzeugt eine Markdown-Übersicht des Hauptmenüs der Plattform sowie der Bildschirme einer bestimmten App. Das Hauptmenü wird vollständig mit einem Seiten-Link zu jedem Eintrag aufgelistet, während die Seiten der betreffenden App und die von ihnen erreichbaren Dialoge ausführlich beschrieben werden.
+
+**Verwenden, wenn.** Der Agent verstehen muss, welche Bildschirme eine App anbietet, was ein Benutzer dort tun kann und wie er zu weiteren Seiten navigiert. Die Seiten-Links im Menü können an `UiWidgetInfoTool` übergeben werden, um Details zu untersuchen.
+
+**Nicht verwenden, wenn.** Um das UXON einer einzelnen, bereits bekannten Seite oder eines Dialogs zu untersuchen, verwenden Sie `UiWidgetInfoTool` direkt.
+
+| Argument | Erforderlich | Beschreibung |
+| --- | --- | --- |
+| `app` | Ja | Alias der App, deren Seiten ausführlich beschrieben werden (zum Beispiel `exface.Core`). |
+| `depth` | Nein | Wie tief Dialoge verfolgt werden, die über Schaltflächen innerhalb der Seiten der App geöffnet werden. Standardwert `10`. |
+
+**Verwendung.** Das Modell übergibt den App-Alias und optional eine Rekursionstiefe. Das Menü wird auf dieselbe Weise wie beim `NavMenu`-Widget aufgebaut, beginnend bei der Standard-Startseite des Servers.
+
+**Ergebnis und Grenzen.** Jedes Bildschirm-Kapitel listet die auf dem Bildschirm gezeigten Metaobjekte sowie alle für den Benutzer verfügbaren Schaltflächen auf. Dialoge werden rekursiv dokumentiert, bis das Tiefenbudget erschöpft ist; nur im Menü sichtbare Seiten erscheinen in der Übersicht.
+
+>>>>>>> 189c39a05d8436be45edc3f8dfc1ca9fa48e1553
 ## `UiWidgetInfoTool`
 
 **Alias:** `axenox.GenAI.UiWidgetInfoTool` | [UXON-Prototyp](api/docs/exface/Core/Docs/UXON/UXON_prototypes.md?selector=%5Caxenox%5CGenAI%5CAI%5CTools%5CUiWidgetInfoTool)

@@ -215,25 +215,36 @@ class OpenAiApiDataQuery extends AbstractDataQuery implements AiQueryInterface
             $sheet->getSorters()->addFromString('SEQUENCE_NUMBER','ASC');
             $sheet->dataRead();
             $this->conversationData = $sheet;
+            
+
             foreach ($sheet->getRows() as $row) {
                 if ($row['ROLE'] === AiMessageTypeDataType::USER) {
                     // TODO load files here by reading them for the message. Which messages can actually include files?
+<<<<<<< HEAD
                     try {
 
                         $filesSheet = DataSheetFactory::createFromObjectIdOrAlias($this->workbench, 'axenox.GenAI.AI_MESSAGE_FILE');
                         $filesSheet->getFilters()->addConditionFromString('AI_MESSAGE', $row['UID']);
+=======
+                        $filesSheet = DataSheetFactory::createFromObjectIdOrAlias($this->workbench, 'axenox.GenAI.AI_MESSAGE_FILE');
+                        $filesSheet->getFilters()->addConditionFromString('AI_MESSAGE', $row['UID'], ComparatorDataType::EQUALS);
+>>>>>>> 189c39a05d8436be45edc3f8dfc1ca9fa48e1553
                         $filesSheet->getColumns()->addMultiple([
                             'PATHNAME_RELATIVE',
                             'CONTENTS'
                         ]);
                         $filesSheet->dataRead();
+<<<<<<< HEAD
                     } catch (\Throwable $e) {
                         $this->workbench->getLogger()->error($e->getMessage());
                         //TODO FIX Every Second message break tthis
 
                     }
+=======
+>>>>>>> 189c39a05d8436be45edc3f8dfc1ca9fa48e1553
                 }
             }
+
         }
         return $this->conversationData;
     }
