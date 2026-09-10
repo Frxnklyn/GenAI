@@ -20,6 +20,11 @@ use exface\Core\Templates\Placeholders\FormulaPlaceholders;
 
 /**
  * Configurable skill containing optional instructions, concepts, and tools.
+ *
+ * Instructions should start with a single `#` heading naming the skill. Rendered instructions are
+ * automatically wrapped in an HTML comment boundary (invisible when the Markdown is displayed to a
+ * human, but still part of the raw text sent to the AI) so the model can recognize where the skill's
+ * instructions begin and end.
  */
 class GenericSkill implements AiSkillInterface
 {
@@ -309,10 +314,23 @@ class GenericSkill implements AiSkillInterface
             foreach ($this->skills as $skill) {
                 $renderer->addPlaceholder($skill);
             }
-            $this->renderedInstructions = $renderer->render($this->instructions);
+            $rendered = trim($renderer->render($this->instructions));
+            $this->renderedInstructions = $rendered === '' ? '' : $this->wrapInBoundary($rendered);
         }
 
         return $this->renderedInstructions;
+    }
+
+    /**
+     * Wraps rendered instructions in an HTML comment boundary marking where this skill's instructions
+     * start and end. A Markdown viewer hides HTML comments, so a human reading the rendered prompt never
+     * sees this boundary - but it remains part of the raw text, so the AI can still use it to tell this
+     * skill's instructions apart from the rest of the prompt.
+     */
+    private function wrapInBoundary(string $instructions) : string
+    {
+        $name = $this->alias ?? $this->getPlaceholder();
+        return "<!-- SKILL START: {$name} -->\n" . $instructions . "\n<!-- SKILL END: {$name} -->";
     }
 
     /**

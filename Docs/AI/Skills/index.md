@@ -28,6 +28,12 @@ The standard `GenericSkill` accepts these optional properties in `CONFIG_UXON`:
 - `skills`: named skills whose rendered instructions can be inserted through local placeholders.
 - `tools`: named tool configurations contributed to the agent.
 
+### Writing skill instructions
+
+Instructions of every skill should start with a single `#` heading (Markdown "Heading 1") naming the skill, for example `# NOTES`. This makes every skill easy to recognize when several skills are combined in one agent prompt.
+
+Do not add your own separator lines or "start/end of section" markers around the instructions - `GenericSkill` adds this automatically. Put in plain terms: when the instructions are rendered for the prompt, `GenericSkill` wraps them in an invisible marker (an HTML comment) that a human reading the resulting Markdown will never see, but that stays part of the text the AI actually reads. This lets the AI reliably tell where one skill's instructions end and the surrounding prompt continues, without cluttering the text that a person would see.
+
 Concepts add background information to a skill. Nested skills can still be configured below `skills` inside the skill's own `CONFIG_UXON`:
 
 ```json

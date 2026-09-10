@@ -28,6 +28,12 @@ Der Standardprototyp `GenericSkill` akzeptiert folgende optionale Eigenschaften 
 - `skills`: benannte Skills, deren gerenderte Instructions über lokale Platzhalter eingefügt werden können.
 - `tools`: benannte Tool-Konfigurationen, die dem Agenten bereitgestellt werden.
 
+### Instructions eines Skills schreiben
+
+Die Instructions jedes Skills sollten mit genau einer `#`-Überschrift (Markdown "Überschrift 1") beginnen, die den Skill benennt, zum Beispiel `# NOTES`. So lässt sich jeder Skill leicht erkennen, wenn mehrere Skills im selben Agent-Prompt kombiniert werden.
+
+Eigene Trennlinien oder "Anfang/Ende des Abschnitts"-Markierungen um die Instructions herum sind nicht nötig - das übernimmt `GenericSkill` automatisch. Vereinfacht gesagt: Beim Rendern für den Prompt umschließt `GenericSkill` die Instructions mit einer unsichtbaren Markierung (einem HTML-Kommentar), die ein Mensch beim Lesen des dargestellten Markdown-Textes nie zu sehen bekommt, die aber Teil des Textes bleibt, den die KI tatsächlich liest. Dadurch kann die KI zuverlässig erkennen, wo die Instructions eines Skills enden und der umgebende Prompt weitergeht, ohne dass der für Menschen sichtbare Text unübersichtlich wird.
+
 Concepts ergänzen einen Skill um Hintergrundinformationen. Verschachtelte Skills können weiterhin unter `skills` im eigenen `CONFIG_UXON` des Skills konfiguriert werden:
 
 ```json
