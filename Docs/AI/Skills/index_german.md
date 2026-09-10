@@ -34,6 +34,19 @@ Die Instructions jedes Skills sollten mit genau einer `#`-Überschrift (Markdown
 
 Eigene Trennlinien oder "Anfang/Ende des Abschnitts"-Markierungen um die Instructions herum sind nicht nötig - das übernimmt `GenericSkill` automatisch. Vereinfacht gesagt: Beim Rendern für den Prompt umschließt `GenericSkill` die Instructions mit einer unsichtbaren Markierung (einem HTML-Kommentar), die ein Mensch beim Lesen des dargestellten Markdown-Textes nie zu sehen bekommt, die aber Teil des Textes bleibt, den die KI tatsächlich liest. Dadurch kann die KI zuverlässig erkennen, wo die Instructions eines Skills enden und der umgebende Prompt weitergeht, ohne dass der für Menschen sichtbare Text unübersichtlich wird.
 
+Wird ein Skill ausschließlich verschachtelt in einem anderen Skill oder Concept verwendet (und nie direkt einem Agenten zugeordnet), sollte für diese Einbindung `use_instruction_boundary` auf `false` gesetzt werden. Sonst umschließt der äußere Skill Text, der bereits umschlossen ist - eine unsichtbare Markierung steckt dann in der anderen, was die äußere Markierung nicht nur überflüssig macht, sondern kaputt gehen lässt:
+
+```json
+{
+    "skills": {
+        "read": {
+            "alias": "my.App.Read",
+            "use_instruction_boundary": false
+        }
+    }
+}
+```
+
 Concepts ergänzen einen Skill um Hintergrundinformationen. Verschachtelte Skills können weiterhin unter `skills` im eigenen `CONFIG_UXON` des Skills konfiguriert werden:
 
 ```json
@@ -61,3 +74,19 @@ Tool-Namen sollten möglichst eindeutig sein. Kommt derselbe Name mehrfach vor, 
 ## Eigene Prototypen
 
 Apps können eigene Skill-Prototypen unter `AI/Skills/*.php` bereitstellen. Ein Prototyp muss `AiSkillInterface` implementieren; die Erweiterung des Verhaltens von `GenericSkill` ist der übliche Ausgangspunkt. Der ausgewählte Prototyp bestimmt die UXON-Eigenschaften im Power-UI-Editor.
+
+## Einen Skill aus einem Concept verwenden
+
+Ein Concept kann die gerenderten Instructions eines Skills genauso einfügen, wie `AgentInstructionsConcept` die Instructions eines anderen Agenten einfügt. Dafür wird [`SkillInstructionsConcept`](api/docs/exface/Core/Docs/UXON/UXON_prototypes.md?selector=%5Caxenox%5CGenAI%5CAI%5CConcepts%5CSkillInstructionsConcept) mit `skill_alias` verwendet, zum Beispiel um mehrere Skills in einer Übersicht zusammenzufassen. Referenzieren Sie es wie jedes andere Concept über `alias`, nicht über `class`. Wie bei verschachtelten Skills sollte `use_instruction_boundary` auf `false` gesetzt werden, wenn der Platzhalter des Concepts bereits von einem umgebenden Skill umschlossen wird:
+
+```json
+{
+    "concepts": {
+        "notes_overview": {
+            "alias": "axenox.GenAI.SkillInstructionsConcept",
+            "skill_alias": "my.App.Notes",
+            "use_instruction_boundary": false
+        }
+    }
+}
+```

@@ -12,6 +12,8 @@ This page documents all concept prototypes currently provided by `axenox.GenAI` 
 
 A concept is configured below `concepts` in `CONFIG_UXON`. The object key is the placeholder name and should describe the content, for example `platform_docs` or `database_schema`. Insert that key into `INSTRUCTIONS` as `[#placeholder_name#]` at the exact position where the rendered content should appear.
 
+Select the concept prototype with `alias` - this is the preferred way and the one used throughout this page, for example `axenox.GenAI.AppDocsConcept`. `class` is only a fallback for a PHP class that has no registered alias and should not be used otherwise.
+
 ```json
 {
   "concepts": {
@@ -187,6 +189,33 @@ Concept output is generated when the prompt is rendered and cached for that conc
 
 **Current recommendation.** Do not use it in an active agent configuration. Use `UiWidgetInfoTool` when the model should inspect a page or widget on demand. If widget context must be injected automatically, call that tool through `ToolCallConcept` with a bounded URL and optional widget ID.
 
+## `SkillInstructionsConcept`
+
+**Alias:** `axenox.GenAI.SkillInstructionsConcept` | [UXON prototype](api/docs/exface/Core/Docs/UXON/UXON_prototypes.md?selector=%5Caxenox%5CGenAI%5CAI%5CConcepts%5CSkillInstructionsConcept)
+
+**Purpose.** Renders another skill's fully resolved instructions - including that skill's own concepts and nested skills - and inserts them at the placeholder.
+
+**Use when.** A skill or agent should reuse another skill's instructions as background text instead of duplicating them, for example to summarize several skills in one overview.
+
+**Do not use when.** Do not use it just to gain access to a skill's tools; nested skills already import tools automatically. Use this concept only when the skill's rendered instruction text itself needs to appear at a specific point.
+
+| UXON property | Default | Description |
+| --- | --- | --- |
+| `skill_alias` | Required | Alias of the skill whose rendered instructions should be inserted. |
+| `use_instruction_boundary` | `true` (inherited from the referenced skill) | Set to `false` when the placeholder is already wrapped in a boundary by a surrounding skill, to avoid nesting one invisible boundary inside another. |
+
+**How to use.** Set `skill_alias` like any other alias-based concept:
+
+```json
+{
+  "alias": "axenox.GenAI.SkillInstructionsConcept",
+  "skill_alias": "my.App.Notes",
+  "use_instruction_boundary": false
+}
+```
+
+**Result and limits.** The result is the referenced skill's rendered instructions. Resolution fails when `skill_alias` is missing or the referenced skill cannot be found.
+
 ## Choosing a concept
 
 | Requirement | Concept |
@@ -198,5 +227,6 @@ Concept output is generated when the prompt is rendered and cached for that conc
 | Insert current tool output during prompt construction | `ToolCallConcept` |
 | Introduce all tools exposed by the agent | `ToolIntroductionConcept` |
 | Supply deterministic test context | `MockConcept` |
+| Reuse another skill's rendered instructions | `SkillInstructionsConcept` |
 
 Choose a concept only when its output is required before the model can answer. Prefer tools for details that are large, volatile, sensitive, expensive to retrieve, or only occasionally needed. A common pattern is to use a concept for a small linked overview and a tool for the linked details.

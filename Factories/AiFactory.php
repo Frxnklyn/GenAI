@@ -115,6 +115,10 @@ abstract class AiFactory extends AbstractSelectableComponentFactory
 
     /**
      * Creates a persisted skill referenced by an alias UXON model.
+     *
+     * Properties other than `alias` in $uxon are treated as local overrides and take precedence over the
+     * properties stored in the referenced skill's own persisted configuration - for example to disable that
+     * skill's instruction boundary when it is only ever included as a nested skill.
      */
     public static function createSkillFromUxon(
         AiAgentInterface $agent,
@@ -126,12 +130,15 @@ abstract class AiFactory extends AbstractSelectableComponentFactory
         if ($alias === '') {
             throw new UxonParserError($uxon, 'Cannot instantiate AI skill: no `alias` property found in UXON model');
         }
+        $overrides = $uxon->copy();
+        $overrides->unsetProperty('alias');
 
         return static::createSkillFromSelector(
             new AiSkillSelector($agent->getWorkbench(), $alias),
             $agent,
             $prompt,
-            $placeholder
+            $placeholder,
+            $overrides
         );
     }
 
@@ -142,7 +149,8 @@ abstract class AiFactory extends AbstractSelectableComponentFactory
         AiSkillSelectorInterface $selector,
         AiAgentInterface $agent,
         AiPromptInterface $prompt,
-        string $placeholder
+        string $placeholder,
+        UxonObject $overrides = null
     ) : AiSkillInterface {
         $dataSheet = DataSheetFactory::createFromObjectIdOrAlias(
             $selector->getWorkbench(),
@@ -170,6 +178,9 @@ abstract class AiFactory extends AbstractSelectableComponentFactory
             ? new UxonObject()
             : UxonObject::fromAnything($configValue);
         $uxon->setProperty('instructions', (string) ($skillData['INSTRUCTIONS'] ?? ''));
+        if ($overrides !== null && $overrides->countProperties() > 0) {
+            $uxon = $uxon->extend($overrides);
+        }
 
         $prototypePath = trim((string) ($skillData['PROTOTYPE_CLASS'] ?? ''));
         if ($prototypePath === '') {

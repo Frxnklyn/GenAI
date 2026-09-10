@@ -34,6 +34,19 @@ Instructions of every skill should start with a single `#` heading (Markdown "He
 
 Do not add your own separator lines or "start/end of section" markers around the instructions - `GenericSkill` adds this automatically. Put in plain terms: when the instructions are rendered for the prompt, `GenericSkill` wraps them in an invisible marker (an HTML comment) that a human reading the resulting Markdown will never see, but that stays part of the text the AI actually reads. This lets the AI reliably tell where one skill's instructions end and the surrounding prompt continues, without cluttering the text that a person would see.
 
+When a skill is only ever consumed nested inside another skill or concept (never assigned directly to an agent), set `use_instruction_boundary` to `false` for that inclusion. Otherwise the outer skill would wrap text that is already wrapped, nesting one invisible marker inside another - which breaks the outer marker instead of just being redundant:
+
+```json
+{
+    "skills": {
+        "read": {
+            "alias": "my.App.Read",
+            "use_instruction_boundary": false
+        }
+    }
+}
+```
+
 Concepts add background information to a skill. Nested skills can still be configured below `skills` inside the skill's own `CONFIG_UXON`:
 
 ```json
@@ -61,3 +74,19 @@ Tool names should be unique where possible. If the same name occurs more than on
 ## Custom prototypes
 
 Apps can provide custom skill prototypes under `AI/Skills/*.php`. A prototype must implement `AiSkillInterface`; extending the behavior of `GenericSkill` is the normal starting point. The selected prototype controls the UXON properties offered by the Power UI editor.
+
+## Using a skill from a concept
+
+A concept can inject a skill's rendered instructions the same way `AgentInstructionsConcept` injects another agent's instructions. Use [`SkillInstructionsConcept`](api/docs/exface/Core/Docs/UXON/UXON_prototypes.md?selector=%5Caxenox%5CGenAI%5CAI%5CConcepts%5CSkillInstructionsConcept) with a `skill_alias`, for example to summarize several skills in an overview. Reference it by `alias` like any other concept, not by `class`. As with nested skills, set `use_instruction_boundary` to `false` when the concept's own placeholder is already wrapped by a surrounding skill:
+
+```json
+{
+    "concepts": {
+        "notes_overview": {
+            "alias": "axenox.GenAI.SkillInstructionsConcept",
+            "skill_alias": "my.App.Notes",
+            "use_instruction_boundary": false
+        }
+    }
+}
+```

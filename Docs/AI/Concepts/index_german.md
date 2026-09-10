@@ -12,6 +12,8 @@ Diese Seite dokumentiert alle derzeit von `axenox.GenAI` bereitgestellten Concep
 
 Ein Concept wird unter `concepts` in `CONFIG_UXON` konfiguriert. Der Objektschlüssel ist der Platzhaltername und sollte den Inhalt beschreiben, beispielsweise `platform_docs` oder `database_schema`. Fügen Sie diesen Schlüssel an genau der Stelle in `INSTRUCTIONS` als `[#placeholder_name#]` ein, an der der gerenderte Inhalt erscheinen soll.
 
+Wählen Sie den Concept-Prototyp über `alias` aus - das ist die bevorzugte Variante und wird auf dieser gesamten Seite so verwendet, zum Beispiel `axenox.GenAI.AppDocsConcept`. `class` ist nur ein Fallback für eine PHP-Klasse ohne registrierten Alias und sollte sonst nicht verwendet werden.
+
 ```json
 {
   "concepts": {
@@ -187,6 +189,33 @@ Die Concept-Ausgabe wird beim Rendern des Prompts erzeugt und für diese Concept
 
 **Aktuelle Empfehlung.** Verwenden Sie ihn nicht in einer aktiven Agentenkonfiguration. Nutzen Sie `UiWidgetInfoTool`, wenn das Modell eine Seite oder ein Widget bei Bedarf untersuchen soll. Muss Widget-Kontext automatisch eingefügt werden, rufen Sie dieses Tool über `ToolCallConcept` mit einer begrenzten URL und optionalen Widget-ID auf.
 
+## `SkillInstructionsConcept`
+
+**Alias:** `axenox.GenAI.SkillInstructionsConcept` | [UXON-Prototyp](api/docs/exface/Core/Docs/UXON/UXON_prototypes.md?selector=%5Caxenox%5CGenAI%5CAI%5CConcepts%5CSkillInstructionsConcept)
+
+**Zweck.** Rendert die vollständig aufgelösten Instructions eines anderen Skills - einschließlich dessen eigener Concepts und verschachtelter Skills - und fügt sie am Platzhalter ein.
+
+**Verwenden, wenn.** Ein Skill oder Agent die Instructions eines anderen Skills als Hintergrundtext wiederverwenden soll, statt sie zu duplizieren, zum Beispiel um mehrere Skills in einer Übersicht zusammenzufassen.
+
+**Nicht verwenden, wenn.** Verwenden Sie es nicht nur, um Zugriff auf die Tools eines Skills zu erhalten; verschachtelte Skills importieren Tools bereits automatisch. Nutzen Sie dieses Concept nur, wenn der gerenderte Instructions-Text des Skills selbst an einer bestimmten Stelle erscheinen muss.
+
+| UXON-Eigenschaft | Standard | Beschreibung |
+| --- | --- | --- |
+| `skill_alias` | Erforderlich | Alias des Skills, dessen gerenderte Instructions eingefügt werden sollen. |
+| `use_instruction_boundary` | `true` (vom referenzierten Skill übernommen) | Auf `false` setzen, wenn der Platzhalter bereits von einem umgebenden Skill in eine Grenze eingeschlossen wird, um zu vermeiden, dass eine unsichtbare Grenze in einer anderen verschachtelt wird. |
+
+**Verwendung.** Setzen Sie `skill_alias` wie bei jedem anderen aliasbasierten Concept:
+
+```json
+{
+  "alias": "axenox.GenAI.SkillInstructionsConcept",
+  "skill_alias": "my.App.Notes",
+  "use_instruction_boundary": false
+}
+```
+
+**Ergebnis und Grenzen.** Das Ergebnis sind die gerenderten Instructions des referenzierten Skills. Die Auflösung schlägt fehl, wenn `skill_alias` fehlt oder der referenzierte Skill nicht gefunden werden kann.
+
 ## Ein Concept auswählen
 
 | Anforderung | Concept |
@@ -198,5 +227,6 @@ Die Concept-Ausgabe wird beim Rendern des Prompts erzeugt und für diese Concept
 | Aktuelle Tool-Ausgaben während der Prompt-Erstellung einfügen | `ToolCallConcept` |
 | Alle vom Agenten bereitgestellten Tools vorstellen | `ToolIntroductionConcept` |
 | Deterministischen Testkontext bereitstellen | `MockConcept` |
+| Die gerenderten Instructions eines anderen Skills wiederverwenden | `SkillInstructionsConcept` |
 
 Wählen Sie ein Concept nur, wenn dessen Ausgabe vorliegen muss, bevor das Modell antworten kann. Bevorzugen Sie Tools für Details, die umfangreich, veränderlich, vertraulich, aufwendig abzurufen oder nur gelegentlich erforderlich sind. Ein übliches Muster besteht darin, ein Concept für eine kleine verlinkte Übersicht und ein Tool für die verlinkten Details zu verwenden.
