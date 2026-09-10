@@ -47,6 +47,7 @@ class GenericSkill implements AiSkillInterface
     private array $warnings = [];
     private ?string $alias = null;
     private bool $autoAppend = true;
+    private bool $useInstructionBoundary = true;
 
     /**
      * Creates a skill in the context of the consuming agent and prompt.
@@ -109,6 +110,24 @@ class GenericSkill implements AiSkillInterface
     protected function setAutoAppend(bool $value) : AiSkillInterface
     {
         $this->autoAppend = $value;
+        return $this;
+    }
+
+    /**
+     * Set to FALSE to render this skill's instructions without the invisible AI-only boundary.
+     *
+     * Use this when the skill is only ever included as a nested skill or through a concept that already
+     * wraps its own combined output in a boundary - this avoids one boundary ending up nested inside
+     * another, which would break the outer boundary.
+     *
+     * @uxon-property use_instruction_boundary
+     * @uxon-type boolean
+     * @uxon-default true
+     */
+    protected function setUseInstructionBoundary(bool $value) : AiSkillInterface
+    {
+        $this->useInstructionBoundary = $value;
+        $this->renderedInstructions = null;
         return $this;
     }
 
@@ -315,7 +334,11 @@ class GenericSkill implements AiSkillInterface
                 $renderer->addPlaceholder($skill);
             }
             $rendered = trim($renderer->render($this->instructions));
-            $this->renderedInstructions = $rendered === '' ? '' : $this->wrapInBoundary($rendered);
+            if ($rendered === '') {
+                $this->renderedInstructions = '';
+            } else {
+                $this->renderedInstructions = $this->useInstructionBoundary ? $this->wrapInBoundary($rendered) : $rendered;
+            }
         }
 
         return $this->renderedInstructions;
