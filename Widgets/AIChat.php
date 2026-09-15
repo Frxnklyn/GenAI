@@ -42,6 +42,10 @@ class AIChat extends InputCustom implements iFillEntireContainer
 
     private array $allowedFileExtensions = [];
 
+    // Enabled by default so every AIChat gets a history dropdown without extra UXON config.
+    private ?UxonObject $conversationHistory = null;
+
+    private bool $conversationHistoryEnabled = true;
 
     protected function init()
     {
@@ -63,13 +67,27 @@ CSS
                 var jqParent = jqSelf.parent();
                 var iHeightP = jqParent.innerHeight();
                 var iWidthP = jqParent.innerWidth();
-                if (iHeightP > 0 && iHeightP > (jqSelf.height() + 4)) {
+                // Resize the wrapper (not the deep-chat element itself) and let its flexbox layout
+                // hand the remaining space to deep-chat - avoids fragile manual sibling-height math.
+                if (iHeightP > 0 && Math.abs(iHeightP - jqSelf.height()) > 4) {
                     jqSelf.height(iHeightP);
                 }
                 if (iWidthP > 0 && iWidthP > (jqSelf.width() + 4)) {
                     jqSelf.width(iWidthP);
                 }
-            }, 100, $('#{$this->getIdOfDeepChat()}'));
+                // DeepChat reads its own inline style.height attribute to size its shadow DOM and
+                // ignores the fact that flexbox already stretched its rendered box - so the inline
+                // height has to be written explicitly every time, even if it looks unchanged.
+                var jqChat = jqSelf.find('#{$this->getIdOfDeepChat()}');
+                var iSiblingsHeight = 0;
+                jqChat.siblings().each(function(){
+                    iSiblingsHeight += $(this).outerHeight(true);
+                });
+                var iChatHeight = jqSelf.height() - iSiblingsHeight;
+                if (iChatHeight > 0) {
+                    jqChat.height(iChatHeight);
+                }
+            }, 100, $('#{$this->getIdOfWrapper()}'));
 JS);
         
         // Get/set value
@@ -84,6 +102,68 @@ JS);
     protected function getIdOfDeepChat() : string
     {
         return $this->getId() . '_deepchat';
+    }
+
+    protected function getIdOfWrapper() : string
+    {
+        return $this->getId() . '_wrapper';
+    }
+
+    protected function getIdOfHistorySelect() : string
+    {
+        return $this->getId() . '_history_select';
+    }
+
+    protected function getIdOfHistoryBadge() : string
+    {
+        return $this->getId() . '_history_badge';
+    }
+
+    /**
+     * Adds a dropdown to load previous conversations of the current user and shows the currently
+     * loaded conversation as a small badge.
+     *
+     * @uxon-property conversation_history
+     * @uxon-type UxonObject
+     * @uxon-template {"enabled": true}
+     *
+     * @param UxonObject $var
+     * @return AIChat
+     */
+    protected function setConversationHistory(UxonObject $var) : AIChat
+    {
+        $this->conversationHistory = $var;
+        $this->conversationHistoryEnabled = $var->getProperty('enabled') ?? true;
+        return $this;
+    }
+
+    // Enabled by default - only explicit `conversation_history: {enabled: false}` turns it off.
+    protected function isConversationHistoryEnabled() : bool
+    {
+        return $this->conversationHistoryEnabled;
+    }
+
+    protected function getHistoryToolbarHtml() : string
+    {
+        if (! $this->isConversationHistoryEnabled()) {
+            return '';
+        }
+
+        return <<<HTML
+            <div
+            class='exf-aichat-history'
+            style="display:flex; flex-direction:row; flex-shrink:0; gap:8px; align-items:center; margin-bottom:6px; box-sizing:border-box;">
+                <select id='{$this->getIdOfHistorySelect()}' style="max-width:60%; padding:4px 6px; border-radius:6px; border:1px solid #ccc; box-sizing:border-box;">
+                    <option value="">Neue Unterhaltung</option>
+                </select>
+                <span
+                id='{$this->getIdOfHistoryBadge()}'
+                class="exf-aichat-history-badge"
+                style="display:inline-flex; align-items:center; padding:2px 10px; border-radius:12px; background:#eef2ff; color:#3730a3; font-size:12px; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                    Neue Unterhaltung
+                </span>
+            </div>
+        HTML;
     }
 
     protected function buildHtmlDeepChat() : string
@@ -103,18 +183,22 @@ JS);
 JS;
         }
         
+        $historyToolbar = $this->getHistoryToolbarHtml();
+
         return <<<HTML
 
-        <div class="deep-chat-wrapper" style="height: 100%">
+        <div id='{$this->getIdOfWrapper()}' class="deep-chat-wrapper" style="height: 100%; display:flex; flex-direction:column; box-sizing:border-box;">
+            {$historyToolbar}
             <div
             class='exf-aichat-top'
-            style="display:flex; flex-direction:row; gap:8px; align-items:center;">
+            style="display:flex; flex-direction:row; flex-shrink:0; gap:8px; align-items:center;">
                 {$top}
             </div>
             <deep-chat 
                 mixedFiles='{$this->getMixedFilesAttributeValue()}'
                 id='{$this->getIdOfDeepChat()}'
                 class='exf-aichat'
+                style="flex:1 1 auto; min-height:0;"
                 connect='{
                     "url": "{$this->getAiChatFacade()->buildUrlToFacade()}/{$this->getAgentAlias()}/deepchat",
                     "method": "POST",
@@ -131,6 +215,9 @@ JS;
                         message.error = message.errorMessage;
                     }else{
                         domEl.conversationId = message.conversation;
+                        if (window['exfAichatOnResponse_' + domEl.id]) {
+                            window['exfAichatOnResponse_' + domEl.id](message.conversation);
+                        }
                     }
                     
                     
@@ -228,7 +315,119 @@ JS;
                     ];
                     domEl.setAttribute('introMessage', '$introMessage');
                 }
+                if (typeof setAichatHistorySelection === 'function') {
+                    setAichatHistorySelection(null);
+                }
             }
+
+            // Conversation history dropdown - lists the current user's previous conversations for
+            // this agent and loads the selected one's messages into the chat.
+            const historySelectEl = document.getElementById('{$this->getIdOfHistorySelect()}');
+            const historyBadgeEl = document.getElementById('{$this->getIdOfHistoryBadge()}');
+            const historyBaseUrl = '{$this->getAiChatFacade()->buildUrlToFacade()}';
+            // Mutable so a page can switch the agent (e.g. via a table selection) and still load its history.
+            let historyAgentAlias = '{$this->getAgentAlias()}';
+            const historyNoConversationLabel = 'Neue Unterhaltung';
+
+            function getHistoryListUrl() {
+                return historyBaseUrl + '/' + historyAgentAlias + '/conversations';
+            }
+
+            function getHistoryMessagesUrl() {
+                return historyBaseUrl + '/' + historyAgentAlias + '/conversations/messages';
+            }
+
+            function formatAichatHistoryLabel(title, date) {
+                const t = (title && title.trim() !== '') ? title : 'Ohne Titel';
+                return date ? (t + ' – ' + date) : t;
+            }
+
+            function setAichatHistoryBadge(text) {
+                if (historyBadgeEl) {
+                    historyBadgeEl.textContent = text;
+                }
+            }
+
+            function setAichatHistorySelection(conversationId, label) {
+                if (historySelectEl) {
+                    historySelectEl.value = conversationId || '';
+                }
+                setAichatHistoryBadge(label || historyNoConversationLabel);
+            }
+
+            function loadAichatHistoryList(selectConversationId) {
+                if (!historySelectEl) {
+                    return;
+                }
+                fetch(getHistoryListUrl())
+                    .then(r => r.json())
+                    .then(data => {
+                        const conversations = data.conversations || [];
+                        historySelectEl.innerHTML = '';
+                        const emptyOption = document.createElement('option');
+                        emptyOption.value = '';
+                        emptyOption.textContent = historyNoConversationLabel;
+                        historySelectEl.appendChild(emptyOption);
+                        conversations.forEach((c) => {
+                            const opt = document.createElement('option');
+                            opt.value = c.id;
+                            opt.textContent = formatAichatHistoryLabel(c.title, c.date);
+                            historySelectEl.appendChild(opt);
+                        });
+                        if (selectConversationId) {
+                            const match = conversations.find((c) => c.id === selectConversationId);
+                            setAichatHistorySelection(selectConversationId, match ? formatAichatHistoryLabel(match.title, match.date) : null);
+                        }
+                    })
+                    .catch((err) => console.error('Could not load conversation history', err));
+            }
+
+            function loadAichatConversation(conversationId) {
+                if (!conversationId) {
+                    resetDeepChat(chat.id);
+                    return;
+                }
+                // Clear the current chat first, just like switching the agent does, so old
+                // messages don't linger while the selected conversation is being fetched.
+                resetDeepChat(chat.id);
+                fetch(getHistoryMessagesUrl() + '?conversation=' + encodeURIComponent(conversationId))
+                    .then(r => r.json())
+                    .then(data => {
+                        chat.conversationId = data.conversation;
+                        chat.messages = data.messages || [];
+                        setAichatHistorySelection(data.conversation, formatAichatHistoryLabel(data.title, data.date));
+                    })
+                    .catch((err) => console.error('Could not load conversation', err));
+            }
+
+            if (historySelectEl) {
+                historySelectEl.addEventListener('change', () => {
+                    loadAichatConversation(historySelectEl.value || null);
+                });
+                loadAichatHistoryList();
+            }
+
+            // Refresh the dropdown once a response created/used a conversation, so its title
+            // becomes visible without a manual reload.
+            window['exfAichatOnResponse_' + chat.id] = function(conversationId) {
+                loadAichatHistoryList(conversationId);
+            };
+
+            // Called by pages that let the user pick a different agent (e.g. an agents table),
+            // so the history dropdown keeps listing conversations of the currently selected agent.
+            window['exfAichatSetAgent_' + chat.id] = function(agentAliasWithVersion) {
+                if (!agentAliasWithVersion) {
+                    return;
+                }
+                historyAgentAlias = agentAliasWithVersion;
+                loadAichatHistoryList();
+            };
+
+            // Called by pages that let the user pick a conversation from a table, so the chat,
+            // the dropdown and the badge all stay in sync instead of jumping out of sync.
+            window['exfAichatLoadConversation_' + chat.id] = function(conversationId) {
+                loadAichatConversation(conversationId || null);
+            };
         
             const input = document.getElementById("ratingInput");
             const stars = document.querySelectorAll("#stars span");

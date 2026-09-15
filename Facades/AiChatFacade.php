@@ -14,6 +14,10 @@ use exface\Core\Facades\AbstractHttpFacade\Middleware\DataUrlParamReader;
 use exface\Core\Facades\AbstractHttpFacade\Middleware\JsonBodyParser;
 use exface\Core\Facades\AbstractHttpFacade\Middleware\TaskReader;
 use axenox\GenAI\Factories\AiFactory;
+use axenox\GenAI\Interfaces\AiAgentInterface;
+use axenox\GenAI\DataTypes\AiMessageTypeDataType;
+use exface\Core\DataTypes\ComparatorDataType;
+use exface\Core\Factories\DataSheetFactory;
 use GuzzleHttp\Psr7\Utils;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
@@ -75,11 +79,11 @@ class AiChatFacade extends AbstractHttpFacade
             }
             $prompt->setFiles($inMemoryFiles);
             $agent = $this->findAgent($agentSelector);
-            $response = $agent->handle($prompt);
         // Do the routing here
             switch (true) {     
                 case $pathInFacade === 'completions':
 
+                    $response = $agent->handle($prompt);
                     $responseCode = 200;
                     $headers['content-type'] = 'application/json';
                     $body = json_encode($response->toArray(), JSON_UNESCAPED_UNICODE);
@@ -87,6 +91,7 @@ class AiChatFacade extends AbstractHttpFacade
                 // Deepchat format - see https://deepchat.dev/docs/connect#Response
                 case $pathInFacade === 'deepchat':
 
+                    $response = $agent->handle($prompt);
                     $responseCode = 200;
                     $headers['content-type'] = 'application/json';
                     $body = json_encode([
@@ -94,6 +99,33 @@ class AiChatFacade extends AbstractHttpFacade
                             'conversation'=> $response->getConversationId(),
                             'additionalMessages' => $response->getStatusMessages()
                         ]
+                        , JSON_UNESCAPED_UNICODE
+                    );
+                    break;
+                // List the conversations of the current user for this agent - used by the AIChat
+                // widget to populate its conversation history dropdown.
+                case $pathInFacade === 'conversations':
+
+                    $responseCode = 200;
+                    $headers['content-type'] = 'application/json';
+                    $body = json_encode([
+                            'conversations' => $this->getConversationsForCurrentUser($agent)
+                        ]
+                        , JSON_UNESCAPED_UNICODE
+                    );
+                    break;
+                // Load the messages of a single conversation (belonging to the current user) in
+                // DeepChat message format - used by the AIChat widget to load history on selection.
+                case $pathInFacade === 'conversations/messages':
+
+                    $conversationId = $request->getQueryParams()['conversation'] ?? null;
+                    if ($conversationId === null || $conversationId === '') {
+                        throw new UnexpectedValueException('Missing required query parameter "conversation"!');
+                    }
+                    $responseCode = 200;
+                    $headers['content-type'] = 'application/json';
+                    $body = json_encode(
+                            $this->getConversationMessagesForCurrentUser($agent, $conversationId)
                         , JSON_UNESCAPED_UNICODE
                     );
                     break;
@@ -226,6 +258,85 @@ class AiChatFacade extends AbstractHttpFacade
         // TODO find agent by selector once an agent list is implemented
         $agent = AiFactory::createAgentFromString($this->getWorkbench(), $selector);
         return $agent;
+    }
+
+    /**
+     * Returns the conversations of the currently authenticated user for the given agent.
+     *
+     * Scoped to the current user to prevent one user from listing another user's conversations.
+     *
+     * @param AiAgentInterface $agent
+     * @return array
+     */
+    protected function getConversationsForCurrentUser(AiAgentInterface $agent) : array
+    {
+        $userUid = $this->getWorkbench()->getSecurity()->getAuthenticatedUser()->getUid();
+
+        $sheet = DataSheetFactory::createFromObjectIdOrAlias($this->getWorkbench(), 'axenox.GenAI.AI_CONVERSATION');
+        $sheet->getColumns()->addMultiple(['UID', 'TITLE', 'CREATED_ON']);
+        $sheet->getFilters()->addConditionFromString('AI_AGENT', $agent->getUid());
+        $sheet->getFilters()->addConditionFromString('USER', $userUid);
+        $sheet->getSorters()->addFromString('CREATED_ON', 'DESC');
+        $sheet->setRowsLimit(50);
+        $sheet->dataRead();
+
+        $result = [];
+        foreach ($sheet->getRows() as $row) {
+            $result[] = [
+                'id' => $row['UID'],
+                'title' => $row['TITLE'],
+                'date' => $row['CREATED_ON']
+            ];
+        }
+        return $result;
+    }
+
+    /**
+     * Returns the user/assistant messages of the given conversation in DeepChat message format.
+     *
+     * The conversation is additionally filtered by the current user's UID (via the AI_CONVERSATION
+     * relation), so a user cannot load another user's conversation by guessing its UID.
+     *
+     * @param AiAgentInterface $agent
+     * @param string $conversationId
+     * @return array
+     */
+    protected function getConversationMessagesForCurrentUser(AiAgentInterface $agent, string $conversationId) : array
+    {
+        $userUid = $this->getWorkbench()->getSecurity()->getAuthenticatedUser()->getUid();
+
+        $conversationSheet = DataSheetFactory::createFromObjectIdOrAlias($this->getWorkbench(), 'axenox.GenAI.AI_CONVERSATION');
+        $conversationSheet->getColumns()->addMultiple(['UID', 'TITLE', 'CREATED_ON']);
+        $conversationSheet->getFilters()->addConditionFromString('UID', $conversationId);
+        $conversationSheet->getFilters()->addConditionFromString('AI_AGENT', $agent->getUid());
+        $conversationSheet->getFilters()->addConditionFromString('USER', $userUid);
+        $conversationSheet->dataRead();
+
+        if ($conversationSheet->isEmpty()) {
+            throw new UnexpectedValueException('Conversation "' . $conversationId . '" not found!');
+        }
+
+        $messageSheet = DataSheetFactory::createFromObjectIdOrAlias($this->getWorkbench(), 'axenox.GenAI.AI_MESSAGE');
+        $messageSheet->getColumns()->addMultiple(['ROLE', 'MESSAGE', 'SEQUENCE_NUMBER']);
+        $messageSheet->getFilters()->addConditionFromString('AI_CONVERSATION', $conversationId);
+        $messageSheet->getFilters()->addConditionFromString('ROLE', AiMessageTypeDataType::USER . ',' . AiMessageTypeDataType::ASSISTANT, ComparatorDataType::IN);
+        $messageSheet->getSorters()->addFromString('SEQUENCE_NUMBER', 'ASC');
+        $messageSheet->dataRead();
+
+        $messages = [];
+        foreach ($messageSheet->getRows() as $row) {
+            $messages[] = [
+                'text' => $row['MESSAGE'],
+                'role' => $row['ROLE'] === AiMessageTypeDataType::ASSISTANT ? 'ai' : 'user'
+            ];
+        }
+
+        return [
+            'conversation' => $conversationId,
+            'title' => $conversationSheet->getRow(0)['TITLE'],
+            'date' => $conversationSheet->getRow(0)['CREATED_ON'],
+            'messages' => $messages
+        ];
     }
 
     /**

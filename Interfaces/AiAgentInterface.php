@@ -28,6 +28,13 @@ interface AiAgentInterface extends iCanBeConvertedToUxon, AliasInterface, iCanGe
     public function getPromptSuggestions(): array;
 
     /**
+     * Returns the UID of the agent (stable across versions).
+     *
+     * @return string
+     */
+    public function getUid() : string;
+
+    /**
      * @param string $name
      * @return AiToolInterface
      */
