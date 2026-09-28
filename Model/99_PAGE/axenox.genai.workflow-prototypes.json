@@ -1,0 +1,59 @@
+{
+    "uid": "0x973b117fd75e4f98a40eef4293103e45",
+    "alias_with_namespace": "axenox.genai.workflow-prototypes",
+    "menu_parent_page_selector": "0x11efb71bcc0c07e2b71b025041000001",
+    "menu_index": 8,
+    "menu_visible": true,
+    "name": "AI Workflow Prototypes",
+    "description": "Inspect available AI workflow prototypes and their configuration",
+    "intro": "",
+    "replaces_page_selector": null,
+    "created_by_user_selector": "0x31000000000000000000000000000000",
+    "created_on": "2026-09-26 12:00:00",
+    "modified_by_user_selector": "0x31000000000000000000000000000000",
+    "modified_on": "2026-09-26 12:00:00",
+    "icon": "project-diagram",
+    "icon_set": "fa",
+    "contents": {
+        "widget_type": "DataTable",
+        "object_alias": "axenox.GenAI.AI_WORKFLOW_PROTOTYPE",
+        "filters": [
+            {
+                "attribute_alias": "NAME"
+            },
+            {
+                "attribute_alias": "APP"
+            },
+            {
+                "attribute_alias": "PATHNAME_RELATIVE"
+            }
+        ],
+        "columns": [
+            {
+                "attribute_alias": "NAME"
+            },
+            {
+                "attribute_alias": "CLASSNAME_WITH_NAMESPACE"
+            },
+            {
+                "attribute_alias": "PATHNAME_RELATIVE"
+            }
+        ],
+        "sorters": [
+            {
+                "attribute_alias": "NAME",
+                "direction": "asc"
+            }
+        ],
+        "buttons": [
+            {
+                "caption": "Details",
+                "bind_to_double_click": true,
+                "action": {
+                    "alias": "exface.Core.ShowObjectInfoDialog",
+                    "disable_buttons": true
+                }
+            }
+        ]
+    }
+}

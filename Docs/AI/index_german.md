@@ -6,6 +6,7 @@ Das GenAI-Framework besteht aus Agenten und ihren Conversations, wiederverwendba
 
 - [Developer-Architektur und Verantwortungsgrenzen](Developer/index_german.md)
 - [Agenten](Agents/index_german.md)
+- [Workflows](Workflows/index_german.md)
 - [Conversations](Conversations/index_german.md)
 - [Skills](Skills/index_german.md)
 - [Tools](Tools/index_german.md)

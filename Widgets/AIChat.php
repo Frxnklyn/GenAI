@@ -24,6 +24,8 @@ class AIChat extends InputCustom implements iFillEntireContainer
 
     private $agentAlias = null;
 
+    private ?string $workflowAlias = null;
+
     private array $promptSuggestionsWidget = [];
 
     private ?AiAgentInterface $agent = null;
@@ -116,7 +118,7 @@ JS;
                 id='{$this->getIdOfDeepChat()}'
                 class='exf-aichat'
                 connect='{
-                    "url": "{$this->getAiChatFacade()->buildUrlToFacade()}/{$this->getAgentAlias()}/deepchat",
+                    "url": "{$this->buildMessageRequestUrl()}",
                     "method": "POST",
                     "additionalBodyProps": {
                         "object": "{$this->getMetaObject()->getAliasWithNamespace()}",
@@ -453,6 +455,48 @@ JS;
     public function getAgentAlias() : string
     {
         return $this->agentAlias;
+    }
+
+    /**
+     * Routes chat prompts through an AI workflow instead of invoking the configured agent directly.
+     *
+     * The workflow receives the `agent_alias` as its entry-agent configuration. Leave this property
+     * empty to preserve the direct single-agent behavior.
+     *
+     * @uxon-property workflow_alias
+     * @uxon-type metamodel:axenox.GenAI.AI_WORKFLOW_PROTOTYPE:ALIAS_WITH_NS
+     */
+    protected function setWorkflowAlias(string $alias) : AIChat
+    {
+        $this->workflowAlias = trim($alias);
+        return $this;
+    }
+
+    /**
+     * Returns the selected workflow prototype alias, if workflow routing is enabled.
+     */
+    public function getWorkflowAlias() : ?string
+    {
+        return $this->workflowAlias;
+    }
+
+    /**
+     * Builds the endpoint used to send chat messages.
+     */
+    protected function buildMessageRequestUrl() : string
+    {
+        $url = $this->getAiChatFacade()->buildUrlToFacade()
+            . '/' . $this->getAgentAlias()
+            . '/deepchat';
+        if ($this->workflowAlias !== null && $this->workflowAlias !== '') {
+            $url .= '?' . http_build_query(
+                [AiChatFacade::QUERY_PARAM_WORKFLOW => $this->workflowAlias],
+                '',
+                '&',
+                PHP_QUERY_RFC3986
+            );
+        }
+        return $url;
     }
 
     /**

@@ -1,0 +1,233 @@
+{
+    "object_alias": "axenox.GenAI.AI_WORKFLOW",
+    "columns": [
+        {"name": "_EXPORT_SUMMARY", "hidden": true, "attribute_alias": "NAME"},
+        {"name": "CREATED_ON", "attribute_alias": "CREATED_ON"},
+        {"name": "MODIFIED_ON", "attribute_alias": "MODIFIED_ON"},
+        {"name": "CREATED_BY_USER", "attribute_alias": "CREATED_BY_USER"},
+        {"name": "MODIFIED_BY_USER", "attribute_alias": "MODIFIED_BY_USER"},
+        {"name": "UID", "attribute_alias": "UID"},
+        {"name": "NAME", "attribute_alias": "NAME"},
+        {"name": "ALIAS", "attribute_alias": "ALIAS"},
+        {"name": "APP", "attribute_alias": "APP"},
+        {"name": "PROTOTYPE_CLASS", "attribute_alias": "PROTOTYPE_CLASS"},
+        {"name": "CONFIG_UXON", "attribute_alias": "CONFIG_UXON"},
+        {"name": "DESCRIPTION", "attribute_alias": "DESCRIPTION"}
+    ],
+    "rows": [
+        {
+            "_EXPORT_SUMMARY": "Showcase: Graph ticket lifecycle",
+            "CREATED_ON": "2026-09-27 16:30:00",
+            "MODIFIED_ON": "2026-09-27 16:30:00",
+            "CREATED_BY_USER": "0x31000000000000000000000000000000",
+            "MODIFIED_BY_USER": "0x31000000000000000000000000000000",
+            "UID": "0xb49e9c3bbd454d629ee3666d019fba85",
+            "NAME": "Showcase: Graph ticket lifecycle",
+            "ALIAS": "showcase_graph_ticket_lifecycle",
+            "APP": "0x11efbd2d8f0ae0babd2dc84bd653ed63",
+            "PROTOTYPE_CLASS": "axenox/genai/AI/Workflows/StepWorkflow.php",
+            "CONFIG_UXON": {
+                "max_steps": 80,
+                "steps": [
+                    {
+                        "alias": "axenox.GenAI.StartStep",
+                        "id": "start",
+                        "caption": "Ticket received"
+                    },
+                    {
+                        "alias": "axenox.GenAI.SwitchStep",
+                        "id": "route_status",
+                        "caption": "Route ticket status",
+                        "cases": [
+                            {
+                                "outcome": "ready",
+                                "caption": "Status is rdy",
+                                "conditions": {
+                                    "operator": "AND",
+                                    "conditions": [
+                                        {"expression": "STATUS", "comparator": "=", "value": "rdy"}
+                                    ]
+                                }
+                            },
+                            {
+                                "outcome": "blocked",
+                                "caption": "Blocked or failed",
+                                "conditions": {
+                                    "operator": "OR",
+                                    "conditions": [
+                                        {"expression": "STATUS", "comparator": "=", "value": "blocked"},
+                                        {"expression": "STATUS", "comparator": "=", "value": "error"}
+                                    ]
+                                }
+                            }
+                        ],
+                        "default_outcome": "otherwise"
+                    },
+                    {
+                        "alias": "axenox.GenAI.AgentStep",
+                        "id": "plan",
+                        "caption": "Plan implementation",
+                        "agent_alias": "axenox.GenAI.agent_designer",
+                        "prompt_template": "Plan implementation for ticket [#~input:ALIAS#]. Return structured JSON.",
+                        "response_mapper": {
+                            "mappings": [
+                                {"from": "message", "to_variable": "implementation_plan"},
+                                {"from": "conversation_id", "to_variable": "planning_conversation"}
+                            ]
+                        }
+                    },
+                    {
+                        "alias": "axenox.GenAI.IfElseStep",
+                        "id": "quality_gate",
+                        "caption": "Priority high enough?",
+                        "conditions": {
+                            "operator": "AND",
+                            "conditions": [
+                                {"expression": "PRIORITY", "comparator": ">=", "value": 80}
+                            ]
+                        }
+                    },
+                    {
+                        "alias": "axenox.GenAI.GroupStep",
+                        "id": "delivery",
+                        "caption": "Prepare delivery",
+                        "output_mapper": {"inherit_columns": true},
+                        "steps": [
+                            {"alias": "axenox.GenAI.StartStep", "id": "delivery_start"},
+                            {
+                                "alias": "axenox.GenAI.ActionStep",
+                                "id": "load_workflow",
+                                "caption": "Load workflow record",
+                                "action": {
+                                    "alias": "exface.Core.ReadData",
+                                    "object_alias": "axenox.GenAI.AI_WORKFLOW"
+                                }
+                            },
+                            {
+                                "alias": "axenox.GenAI.EndStep",
+                                "id": "delivery_end",
+                                "response_template": "Delivery preparation complete"
+                            }
+                        ],
+                        "transitions": [
+                            {"from_step": "delivery_start", "outcome": "success", "to_step": "load_workflow"},
+                            {"from_step": "load_workflow", "outcome": "success", "to_step": "delivery_end"}
+                        ]
+                    },
+                    {
+                        "alias": "axenox.GenAI.ForEachStep",
+                        "id": "review_tickets",
+                        "caption": "Review affected tickets",
+                        "max_iterations": 25,
+                        "output_mapper": {"inherit_columns": true},
+                        "steps": [
+                            {"alias": "axenox.GenAI.StartStep", "id": "review_start"},
+                            {
+                                "alias": "axenox.GenAI.AgentStep",
+                                "id": "review_agent",
+                                "caption": "Review ticket",
+                                "agent_alias": "axenox.GenAI.workbench_ai_assistant",
+                                "prompt_template": "Review ticket [#~input:ALIAS#] and identify the next action."
+                            },
+                            {
+                                "alias": "axenox.GenAI.EndStep",
+                                "id": "review_end",
+                                "response_step": "review_agent"
+                            }
+                        ],
+                        "transitions": [
+                            {"from_step": "review_start", "outcome": "success", "to_step": "review_agent"},
+                            {"from_step": "review_agent", "outcome": "success", "to_step": "review_end"}
+                        ]
+                    },
+                    {
+                        "alias": "axenox.GenAI.AgentStep",
+                        "id": "recover",
+                        "caption": "Analyze blocker",
+                        "agent_alias": "axenox.GenAI.log_analyzer_assistant",
+                        "prompt_template": "Analyze the blocker for ticket [#~input:ALIAS#]."
+                    },
+                    {
+                        "alias": "axenox.GenAI.SubworkflowStep",
+                        "id": "triage",
+                        "caption": "Detailed triage",
+                        "workflow_alias": "axenox.GenAI.showcase_ticket_triage"
+                    },
+                    {
+                        "alias": "axenox.GenAI.ActionStep",
+                        "id": "recovery_action",
+                        "caption": "Load recovery context",
+                        "action": {
+                            "alias": "exface.Core.ReadData",
+                            "object_alias": "axenox.GenAI.AI_WORKFLOW"
+                        }
+                    },
+                    {
+                        "alias": "axenox.GenAI.EndStep",
+                        "id": "ready_end",
+                        "caption": "Ready response",
+                        "response_step": "review_tickets"
+                    },
+                    {
+                        "alias": "axenox.GenAI.EndStep",
+                        "id": "blocked_end",
+                        "caption": "Blocked response",
+                        "response_step": "recover"
+                    },
+                    {
+                        "alias": "axenox.GenAI.EndStep",
+                        "id": "triage_end",
+                        "caption": "Triage response",
+                        "response_step": "triage"
+                    },
+                    {
+                        "alias": "axenox.GenAI.EndStep",
+                        "id": "recovery_end",
+                        "caption": "Recovery response",
+                        "response_template": "The workflow followed its configured recovery path."
+                    }
+                ],
+                "transitions": [
+                    {"from_step": "start", "outcome": "success", "to_step": "route_status"},
+                    {"from_step": "route_status", "outcome": "ready", "to_step": "plan", "caption": "rdy", "color": "#2e7d32"},
+                    {"from_step": "route_status", "outcome": "blocked", "to_step": "recover", "color": "#c62828"},
+                    {"from_step": "route_status", "outcome": "otherwise", "to_step": "triage", "color": "#7b5ea7"},
+                    {"from_step": "plan", "outcome": "success", "to_step": "quality_gate"},
+                    {"from_step": "plan", "outcome": "error", "to_step": "recovery_action", "color": "#c62828"},
+                    {"from_step": "quality_gate", "outcome": "true", "to_step": "delivery", "caption": "wenn true", "color": "#2e7d32"},
+                    {"from_step": "quality_gate", "outcome": "false", "to_step": "recover", "caption": "sonst", "color": "#d97706"},
+                    {"from_step": "delivery", "outcome": "success", "to_step": "review_tickets"},
+                    {"from_step": "delivery", "outcome": "error", "to_step": "recovery_action", "color": "#c62828"},
+                    {"from_step": "review_tickets", "outcome": "success", "to_step": "ready_end", "color": "#2e7d32"},
+                    {"from_step": "review_tickets", "outcome": "error", "to_step": "recovery_action", "color": "#c62828"},
+                    {"from_step": "recover", "outcome": "success", "to_step": "blocked_end", "color": "#c62828"},
+                    {"from_step": "recover", "outcome": "error", "to_step": "recovery_action", "color": "#c62828"},
+                    {"from_step": "triage", "outcome": "success", "to_step": "triage_end", "color": "#7b5ea7"},
+                    {"from_step": "triage", "outcome": "error", "to_step": "recovery_action", "color": "#c62828"},
+                    {"from_step": "recovery_action", "outcome": "success", "to_step": "recovery_end", "color": "#c62828"},
+                    {"from_step": "recovery_action", "outcome": "error", "to_step": "recovery_end", "color": "#c62828"}
+                ]
+            },
+            "DESCRIPTION": "Demonstrates StepWorkflow with Switch and If/Else routing, agents, an ExFace Action, a nested workflow, a grouped subgraph, a bounded per-row loop, explicit response mapping, colored routes and recovery paths."
+        }
+    ],
+    "totals_rows": [],
+    "filters": {
+        "operator": "AND",
+        "base_object_alias": "axenox.GenAI.AI_WORKFLOW",
+        "conditions": [
+            {
+                "expression": "APP",
+                "comparator": "=",
+                "value": "0x11efbd2d8f0ae0babd2dc84bd653ed63",
+                "object_alias": "axenox.GenAI.AI_WORKFLOW"
+            }
+        ]
+    },
+    "rows_limit": null,
+    "rows_offset": 0,
+    "sorters": [
+        {"attribute_alias": "CREATED_ON", "direction": "ASC"},
+        {"attribute_alias": "UID", "direction": "ASC"}
+    ]
+}

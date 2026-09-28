@@ -2,10 +2,16 @@
 namespace axenox\GenAI\Facades;
 
 use axenox\GenAI\Common\AiPrompt;
+use axenox\GenAI\Common\Selectors\AiWorkflowSelector;
+use axenox\GenAI\Exceptions\AiWorkflowNotFoundError;
 use axenox\GenAI\Exceptions\AiPromptError;
 use axenox\GenAI\Facades\Middleware\FormDataMiddleware;
+use axenox\GenAI\Interfaces\AiAgentInterface;
+use axenox\GenAI\Interfaces\AiPromptHandlerInterface;
 use axenox\GenAI\Interfaces\AiPromptInterface;
+use axenox\GenAI\Interfaces\AiWorkflowInterface;
 use exface\Core\CommonLogic\Filesystem\InMemoryFile;
+use exface\Core\CommonLogic\UxonObject;
 use Psr\Http\Message\UploadedFileInterface;
 use exface\Core\Exceptions\Facades\FacadeRoutingError;
 use exface\Core\Exceptions\UnexpectedValueException;
@@ -47,6 +53,7 @@ use exface\Core\DataTypes\StringDataType;
 class AiChatFacade extends AbstractHttpFacade
 {
     const REQUEST_ATTR_TASK = 'task';
+    const QUERY_PARAM_WORKFLOW = 'workflow';
 
     protected function createResponse(ServerRequestInterface $request) : ResponseInterface
     {
@@ -74,8 +81,9 @@ class AiChatFacade extends AbstractHttpFacade
                 throw new UnexpectedValueException("Request not delivered a AI Prompt");
             }
             $prompt->setFiles($inMemoryFiles);
-            $agent = $this->findAgent($agentSelector);
-            $response = $agent->handle($prompt);
+            $workflowSelector = trim((string) ($request->getQueryParams()[self::QUERY_PARAM_WORKFLOW] ?? ''));
+            $handler = $this->findPromptHandler($agentSelector, $workflowSelector);
+            $response = $handler->handle($prompt);
         // Do the routing here
             switch (true) {     
                 case $pathInFacade === 'completions':
@@ -221,11 +229,47 @@ class AiChatFacade extends AbstractHttpFacade
         return $middleware;
     }
 
-    protected function findAgent(string $selector)
+    protected function findAgent(string $selector) : AiAgentInterface
     {
         // TODO find agent by selector once an agent list is implemented
         $agent = AiFactory::createAgentFromString($this->getWorkbench(), $selector);
         return $agent;
+    }
+
+    /**
+     * Resolves the configured agent or wraps it in the selected workflow.
+     */
+    protected function findPromptHandler(
+        string $agentSelector,
+        string $workflowSelector = ''
+    ) : AiPromptHandlerInterface
+    {
+        if ($workflowSelector === '') {
+            return $this->findAgent($agentSelector);
+        }
+        return $this->findWorkflow($workflowSelector, $agentSelector);
+    }
+
+    /**
+     * Resolves a persisted AI workflow or a compatible workflow prototype by namespaced alias.
+     */
+    protected function findWorkflow(
+        string $selector,
+        string $agentSelector
+    ) : AiWorkflowInterface
+    {
+        $workflowSelector = new AiWorkflowSelector($this->getWorkbench(), $selector);
+        if (! $workflowSelector->isAlias()) {
+            throw new AiWorkflowNotFoundError('AI workflow must be selected by a namespaced alias');
+        }
+        try {
+            return AiFactory::createWorkflowFromModelSelector($workflowSelector);
+        } catch (AiWorkflowNotFoundError $e) {
+            return AiFactory::createWorkflowFromSelector(
+                $workflowSelector,
+                new UxonObject(['agent_alias' => $agentSelector])
+            );
+        }
     }
 
     /**

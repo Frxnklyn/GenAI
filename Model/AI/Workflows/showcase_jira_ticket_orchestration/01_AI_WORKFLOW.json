@@ -1,0 +1,204 @@
+{
+    "object_alias": "axenox.GenAI.AI_WORKFLOW",
+    "columns": [
+        {"name": "_EXPORT_SUMMARY", "hidden": true, "attribute_alias": "NAME"},
+        {"name": "CREATED_ON", "attribute_alias": "CREATED_ON"},
+        {"name": "MODIFIED_ON", "attribute_alias": "MODIFIED_ON"},
+        {"name": "CREATED_BY_USER", "attribute_alias": "CREATED_BY_USER"},
+        {"name": "MODIFIED_BY_USER", "attribute_alias": "MODIFIED_BY_USER"},
+        {"name": "UID", "attribute_alias": "UID"},
+        {"name": "NAME", "attribute_alias": "NAME"},
+        {"name": "ALIAS", "attribute_alias": "ALIAS"},
+        {"name": "APP", "attribute_alias": "APP"},
+        {"name": "PROTOTYPE_CLASS", "attribute_alias": "PROTOTYPE_CLASS"},
+        {"name": "CONFIG_UXON", "attribute_alias": "CONFIG_UXON"},
+        {"name": "DESCRIPTION", "attribute_alias": "DESCRIPTION"}
+    ],
+    "rows": [
+        {
+            "_EXPORT_SUMMARY": "Showcase: Single Jira ticket",
+            "CREATED_ON": "2026-09-27 19:00:00",
+            "MODIFIED_ON": "2026-09-27 19:00:00",
+            "CREATED_BY_USER": "0x31000000000000000000000000000000",
+            "MODIFIED_BY_USER": "0x31000000000000000000000000000000",
+            "UID": "0x96e7b77ba0884aaca1e42bb9df4a1fd4",
+            "NAME": "Showcase: Single Jira ticket",
+            "ALIAS": "showcase_jira_ticket_orchestration",
+            "APP": "0x11efbd2d8f0ae0babd2dc84bd653ed63",
+            "PROTOTYPE_CLASS": "axenox/genai/AI/Workflows/StepWorkflow.php",
+            "CONFIG_UXON": {
+                "max_steps": 50,
+                "legend": [
+                    {"caption": "Selected or completed ticket", "color": "#bbf7d0"},
+                    {"caption": "Status decision", "color": "#fef3c7"},
+                    {"caption": "AI agent", "color": "#dbeafe"},
+                    {"caption": "ExFace Action", "color": "#fed7aa"},
+                    {"caption": "Skipped ticket", "color": "#e5e7eb"},
+                    {"caption": "Technical failure", "color": "#fecaca"}
+                ],
+                "steps": [
+                    {
+                        "alias": "axenox.GenAI.StartStep",
+                        "id": "ticket_start",
+                        "caption": "Jira ticket selected",
+                        "color": "#bbf7d0"
+                    },
+                            {
+                                "alias": "axenox.GenAI.SwitchStep",
+                                "id": "jira_status",
+                                "caption": "Current Jira status",
+                                "color": "#fef3c7",
+                                "cases": [
+                                    {
+                                        "outcome": "ready",
+                                        "caption": "Ready",
+                                        "conditions": {
+                                            "operator": "AND",
+                                            "conditions": [
+                                                {"expression": "STATUS", "comparator": "=", "value": "rdy"}
+                                            ]
+                                        }
+                                    },
+                                    {
+                                        "outcome": "implementing",
+                                        "caption": "Implementing",
+                                        "conditions": {
+                                            "operator": "AND",
+                                            "conditions": [
+                                                {"expression": "STATUS", "comparator": "=", "value": "implementing"}
+                                            ]
+                                        }
+                                    }
+                                ],
+                                "default_outcome": "unexpected"
+                            },
+                            {
+                                "alias": "axenox.GenAI.AgentStep",
+                                "id": "story_planner",
+                                "caption": "Story Planner Agent",
+                                "color": "#dbeafe",
+                                "agent_alias": "demo.Jira.story_planner_agent",
+                                "prompt_template": "Create an implementation plan for Jira ticket [#~input:ALIAS#]. Return JSON with plan.summary and plan.acceptance_criteria.",
+                                "response_mapper": {
+                                    "mappings": [
+                                        {"from": "json_path:$.plan.summary", "to_attribute_alias": "DESCRIPTION"},
+                                        {"from": "json_path:$.plan.acceptance_criteria", "to_attribute_alias": "COMMENTS"}
+                                    ]
+                                }
+                            },
+                            {
+                                "alias": "axenox.GenAI.ActionStep",
+                                "id": "refresh_plan",
+                                "caption": "Refresh persisted plan (demo action)",
+                                "color": "#fed7aa",
+                                "action": {
+                                    "alias": "exface.Core.ReadData",
+                                    "object_alias": "axenox.GenAI.AI_WORKFLOW"
+                                }
+                            },
+                            {
+                                "alias": "axenox.GenAI.AgentStep",
+                                "id": "test_agent",
+                                "caption": "Test Agent",
+                                "color": "#dbeafe",
+                                "agent_alias": "demo.Jira.test_design_agent",
+                                "prompt_template": "Design tests for Jira ticket [#~input:ALIAS#]. Use the persisted plan [#~input:DESCRIPTION#] and acceptance criteria [#~input:COMMENTS#]. Return JSON with result and test_summary.",
+                                "response_mapper": {
+                                    "mappings": [
+                                        {"from": "json_path:$.test_summary", "to_attribute_alias": "SHORT_DESCRIPTION"},
+                                        {"from": "json_path:$.result", "to_variable": "test_result"}
+                                    ]
+                                }
+                            },
+                            {
+                                "alias": "axenox.GenAI.AgentStep",
+                                "id": "implementation_agent",
+                                "caption": "Implementation Agent",
+                                "color": "#dbeafe",
+                                "agent_alias": "demo.Jira.implementation_agent",
+                                "prompt_template": "Continue implementation of Jira ticket [#~input:ALIAS#] using the current plan [#~input:DESCRIPTION#]. Return JSON with implementation_summary.",
+                                "response_mapper": {
+                                    "mappings": [
+                                        {"from": "json_path:$.implementation_summary", "to_attribute_alias": "SHORT_DESCRIPTION"}
+                                    ]
+                                }
+                            },
+                            {
+                                "alias": "axenox.GenAI.ActionStep",
+                                "id": "log_ticket_failure",
+                                "caption": "Log ticket failure (demo action)",
+                                "color": "#fecaca",
+                                "action": {
+                                    "alias": "exface.Core.ReadData",
+                                    "object_alias": "axenox.GenAI.AI_WORKFLOW"
+                                }
+                            },
+                            {
+                                "alias": "axenox.GenAI.EndStep",
+                                "id": "planned_and_tested",
+                                "caption": "Ticket processed after planning",
+                                "color": "#bbf7d0",
+                                "response_step": "test_agent"
+                            },
+                            {
+                                "alias": "axenox.GenAI.EndStep",
+                                "id": "implemented",
+                                "caption": "Ticket processed after implementation",
+                                "color": "#bbf7d0",
+                                "response_step": "implementation_agent"
+                            },
+                            {
+                                "alias": "axenox.GenAI.EndStep",
+                                "id": "status_skipped",
+                                "caption": "Missing or unexpected status",
+                                "color": "#e5e7eb",
+                                "response_template": "Ticket skipped because its Jira status is not supported."
+                            },
+                            {
+                                "alias": "axenox.GenAI.EndStep",
+                                "id": "ticket_failed",
+                                "caption": "Ticket failure logged",
+                                "color": "#fecaca",
+                                "response_template": "The ticket failed technically and was logged."
+                    }
+                ],
+                "transitions": [
+                    {"from_step": "ticket_start", "outcome": "success", "to_step": "jira_status"},
+                    {"from_step": "jira_status", "outcome": "ready", "to_step": "story_planner", "caption": "Ready", "color": "#2563eb"},
+                    {"from_step": "jira_status", "outcome": "implementing", "to_step": "implementation_agent", "caption": "Implementing", "color": "#2563eb"},
+                    {"from_step": "jira_status", "outcome": "unexpected", "to_step": "status_skipped", "caption": "Missing or unexpected", "color": "#6b7280"},
+                    {"from_step": "story_planner", "outcome": "success", "to_step": "refresh_plan"},
+                    {"from_step": "story_planner", "outcome": "error", "to_step": "log_ticket_failure", "caption": "Technical error", "color": "#c62828"},
+                    {"from_step": "refresh_plan", "outcome": "success", "to_step": "test_agent"},
+                    {"from_step": "refresh_plan", "outcome": "error", "to_step": "log_ticket_failure", "caption": "Technical error", "color": "#c62828"},
+                    {"from_step": "test_agent", "outcome": "success", "to_step": "planned_and_tested", "caption": "Processed", "color": "#2e7d32"},
+                    {"from_step": "test_agent", "outcome": "error", "to_step": "log_ticket_failure", "caption": "Technical error", "color": "#c62828"},
+                    {"from_step": "implementation_agent", "outcome": "success", "to_step": "implemented", "caption": "Processed", "color": "#2e7d32"},
+                    {"from_step": "implementation_agent", "outcome": "error", "to_step": "log_ticket_failure", "caption": "Technical error", "color": "#c62828"},
+                    {"from_step": "log_ticket_failure", "outcome": "success", "to_step": "ticket_failed"},
+                    {"from_step": "log_ticket_failure", "outcome": "error", "to_step": "ticket_failed", "color": "#c62828"}
+                ]
+            },
+            "DESCRIPTION": "Conceptual workflow for one selected Jira ticket with status routing, fictional Story Planner, Test and Implementation agents, explicit JSONPath response handoff, Actions and technical error routes. Replace demo aliases and Actions before execution."
+        }
+    ],
+    "totals_rows": [],
+    "filters": {
+        "operator": "AND",
+        "base_object_alias": "axenox.GenAI.AI_WORKFLOW",
+        "conditions": [
+            {
+                "expression": "APP",
+                "comparator": "=",
+                "value": "0x11efbd2d8f0ae0babd2dc84bd653ed63",
+                "object_alias": "axenox.GenAI.AI_WORKFLOW"
+            }
+        ]
+    },
+    "rows_limit": null,
+    "rows_offset": 0,
+    "sorters": [
+        {"attribute_alias": "CREATED_ON", "direction": "ASC"},
+        {"attribute_alias": "UID", "direction": "ASC"}
+    ]
+}
