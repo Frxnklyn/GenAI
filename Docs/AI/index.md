@@ -6,6 +6,7 @@ The GenAI framework consists of agents and their conversations, reusable skills,
 
 - [Developer architecture and responsibility boundaries](Developer/index.md)
 - [Agents](Agents/index.md)
+- [Workflows](Workflows/index.md)
 - [Conversations](Conversations/index.md)
 - [Skills](Skills/index.md)
 - [Tools](Tools/index.md)

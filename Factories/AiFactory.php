@@ -16,21 +16,25 @@ use axenox\GenAI\Interfaces\AiToolCallMessageInterface;
 use axenox\GenAI\Interfaces\AiToolResultInterface;
 use axenox\GenAI\Common\Selectors\AiToolSelector;
 use axenox\GenAI\Common\Selectors\AiSkillSelector;
+use axenox\GenAI\Common\Selectors\AiWorkflowSelector;
 use axenox\GenAI\Exceptions\AiAgentNotFoundError;
 use axenox\GenAI\Exceptions\AiConceptNotFoundError;
 use axenox\GenAI\Exceptions\AiSkillNotFoundError;
 use axenox\GenAI\Exceptions\AiToolNotFoundError;
+use axenox\GenAI\Exceptions\AiWorkflowNotFoundError;
 use axenox\GenAI\Interfaces\AiPromptInterface;
 use axenox\GenAI\Interfaces\AiConversationInterface;
 use axenox\GenAI\Interfaces\AiTaskHandlerInterface;
 use axenox\GenAI\Interfaces\AiTaskHandlerWithoutConnectionInterface;
 use axenox\GenAI\Interfaces\AiSkillInterface;
 use axenox\GenAI\Interfaces\AiToolInterface;
+use axenox\GenAI\Interfaces\AiWorkflowInterface;
 use axenox\GenAI\Common\Selectors\AiAgentSelector;
 use axenox\GenAI\Common\Selectors\AiConceptSelector;
 use axenox\GenAI\Interfaces\Selectors\AiConceptSelectorInterface;
 use axenox\GenAI\Interfaces\Selectors\AiSkillSelectorInterface;
 use axenox\GenAI\Interfaces\Selectors\AiToolSelectorInterface;
+use axenox\GenAI\Interfaces\Selectors\AiWorkflowSelectorInterface;
 use exface\Core\CommonLogic\UxonObject;
 use exface\Core\DataTypes\ComparatorDataType;
 use exface\Core\DataTypes\FilePathDataType;
@@ -44,6 +48,7 @@ use exface\Core\Exceptions\UxonParserError;
 use axenox\GenAI\Interfaces\AiAgentInterface;
 use axenox\GenAI\Interfaces\AiConceptInterface;
 use exface\Core\Factories\AbstractSelectableComponentFactory;
+use exface\Core\Factories\DataConnectionFactory;
 use exface\Core\Factories\DataSheetFactory;
 use axenox\GenAI\Interfaces\Selectors\AiAgentSelectorInterface;
 use exface\Core\Interfaces\DataSheets\DataSheetInterface;
@@ -61,6 +66,177 @@ use exface\Core\Interfaces\WorkbenchInterface;
  */
 abstract class AiFactory extends AbstractSelectableComponentFactory
 {
+    /**
+     * Creates a workflow prototype from a namespaced alias.
+     */
+    public static function createWorkflowFromString(
+        WorkbenchInterface $workbench,
+        string $alias,
+        UxonObject $uxon = null
+    ) : AiWorkflowInterface
+    {
+        return static::createWorkflowFromSelector(new AiWorkflowSelector($workbench, $alias), $uxon);
+    }
+
+    /**
+     * Creates a workflow prototype from its selector.
+     */
+    public static function createWorkflowFromSelector(
+        AiWorkflowSelectorInterface $selector,
+        UxonObject $uxon = null
+    ) : AiWorkflowInterface
+    {
+        $class = static::findWorkflowClass($selector);
+
+        return static::instantiateWorkflow($selector, $class, $uxon);
+    }
+
+    /**
+     * Loads a persisted workflow by its namespaced model alias.
+     */
+    public static function createWorkflowFromModelAlias(
+        WorkbenchInterface $workbench,
+        string $alias
+    ) : AiWorkflowInterface
+    {
+        return static::createWorkflowFromModelSelector(new AiWorkflowSelector($workbench, $alias));
+    }
+
+    /**
+     * Loads a persisted workflow configuration and instantiates its selected prototype.
+     */
+    public static function createWorkflowFromModelSelector(
+        AiWorkflowSelectorInterface $selector
+    ) : AiWorkflowInterface
+    {
+        $dataSheet = DataSheetFactory::createFromObjectIdOrAlias(
+            $selector->getWorkbench(),
+            'axenox.GenAI.AI_WORKFLOW'
+        );
+        $dataSheet->getFilters()->addConditionFromString(
+            'ALIAS_WITH_NS',
+            $selector->toString(),
+            ComparatorDataType::EQUALS
+        );
+        $dataSheet->getColumns()->addMultiple([
+            'PROTOTYPE_CLASS',
+            'CONFIG_UXON'
+        ]);
+        $dataSheet->dataRead();
+
+        if ($dataSheet->countRows() !== 1) {
+            throw new AiWorkflowNotFoundError('AI workflow "' . $selector->toString() . '" not found');
+        }
+
+        $workflowData = $dataSheet->getRowFirst();
+        $prototypePath = trim((string) ($workflowData['PROTOTYPE_CLASS'] ?? ''));
+        if ($prototypePath === '') {
+            throw new AiWorkflowNotFoundError('AI workflow "' . $selector->toString() . '" has no prototype class');
+        }
+
+        $configValue = $workflowData['CONFIG_UXON'] ?? null;
+        $uxon = $configValue === null || $configValue === ''
+            ? new UxonObject()
+            : UxonObject::fromAnything($configValue);
+
+        return static::createWorkflowFromPrototype($selector, $prototypePath, $uxon);
+    }
+
+    /**
+     * Instantiates a workflow prototype file for the supplied logical workflow selector.
+     */
+    public static function createWorkflowFromPrototype(
+        AiWorkflowSelectorInterface $selector,
+        string $prototypePath,
+        UxonObject $uxon = null
+    ) : AiWorkflowInterface
+    {
+        try {
+            $class = PhpFilePathDataType::findClassInFile(
+                $selector->getWorkbench()->filemanager()->getPathToVendorFolder()
+                . DIRECTORY_SEPARATOR . ltrim($prototypePath, '\\/')
+            );
+        } catch (\Throwable $e) {
+            throw new AiWorkflowNotFoundError(
+                'Prototype of AI workflow "' . $selector->toString() . '" not found',
+                null,
+                $e
+            );
+        }
+
+        return static::instantiateWorkflow($selector, $class, $uxon);
+    }
+
+    /**
+     * Creates and validates a workflow instance from an already resolved PHP class.
+     */
+    private static function instantiateWorkflow(
+        AiWorkflowSelectorInterface $selector,
+        string $class,
+        UxonObject $uxon = null
+    ) : AiWorkflowInterface
+    {
+
+        try {
+            $workflow = new $class($selector, $uxon);
+        } catch (\Throwable $e) {
+            throw new AiWorkflowNotFoundError(
+                'Cannot instantiate AI workflow "' . $selector->toString() . '"',
+                null,
+                $e
+            );
+        }
+
+        if (! $workflow instanceof AiWorkflowInterface) {
+            throw new AiWorkflowNotFoundError(
+                'Prototype of AI workflow "' . $selector->toString() . '" must implement ' . AiWorkflowInterface::class
+            );
+        }
+
+        return $workflow;
+    }
+
+    /**
+     * Resolves the PHP class selected for an AI workflow.
+     */
+    public static function findWorkflowClass(AiWorkflowSelectorInterface $selector) : string
+    {
+        switch (true) {
+            case $selector->isAlias():
+                $appAlias = trim($selector->getAppAlias() ?? '');
+                $workflowAlias = trim(StringDataType::substringAfter(
+                    $selector->toString(),
+                    AliasSelectorInterface::ALIAS_NAMESPACE_DELIMITER,
+                    $selector->toString(),
+                    false,
+                    true
+                ));
+                if ($appAlias === '' || $workflowAlias === '') {
+                    throw new AiWorkflowNotFoundError('AI workflow "' . $selector->toString() . '" not found');
+                }
+                $classPath = $selector->getWorkbench()->filemanager()->getPathToVendorFolder()
+                    . DIRECTORY_SEPARATOR . str_replace(AliasSelectorInterface::ALIAS_NAMESPACE_DELIMITER, DIRECTORY_SEPARATOR, $appAlias)
+                    . DIRECTORY_SEPARATOR . 'AI'
+                    . DIRECTORY_SEPARATOR . 'Workflows'
+                    . DIRECTORY_SEPARATOR . $workflowAlias . '.php';
+                try {
+                    return PhpFilePathDataType::findClassInFile($classPath);
+                } catch (\Throwable $e) {
+                    throw new AiWorkflowNotFoundError(
+                        'AI workflow "' . $selector->toString() . '" not found',
+                        null,
+                        $e
+                    );
+                }
+            case $selector->isClassname():
+                return $selector->toString();
+            case $selector->isFilepath():
+                return PhpFilePathDataType::findClassInFile($selector->toString());
+            default:
+                throw new AiWorkflowNotFoundError('AI workflow "' . $selector->toString() . '" not found');
+        }
+    }
+
     /**
      * Creates a new conversation or restores the conversation referenced by the prompt.
      * 
@@ -200,6 +376,8 @@ abstract class AiFactory extends AbstractSelectableComponentFactory
         switch (true) {
             case ($selector instanceof AiAgentSelectorInterface):
                 return static::createAgentFromString($selector->getWorkbench(), $selector->toString());
+            case ($selector instanceof AiWorkflowSelectorInterface):
+                return static::createWorkflowFromSelector($selector, $constructorArguments[0] ?? null);
 
         }
         return parent::createFromSelector($selector, $constructorArguments);
@@ -404,6 +582,27 @@ abstract class AiFactory extends AbstractSelectableComponentFactory
         return $handler;
     }
 
+    // Generated by GitHub Copilot - Nov-26-2026
+    /**
+     * Creates a chat agent with a connection override for this invocation only.
+     */
+    public static function createAgentWithConnectionFromString(
+        WorkbenchInterface $workbench,
+        string $aliasWithVersion,
+        string $connectionAlias
+    ) : AiAgentInterface
+    {
+        $connectionAlias = trim($connectionAlias);
+        if ($connectionAlias === '') {
+            throw new InvalidArgumentException('The transient AI connection alias must not be empty');
+        }
+        $handler = static::createConfiguredTaskHandler($workbench, $aliasWithVersion, $connectionAlias);
+        if (! $handler instanceof AiAgentInterface) {
+            throw new AiAgentNotFoundError("AI task handler '$aliasWithVersion' does not handle AI prompts");
+        }
+        return $handler;
+    }
+
     /**
      * Creates a configured task handler from an alias and semantic version constraint.
      * 
@@ -415,6 +614,19 @@ abstract class AiFactory extends AbstractSelectableComponentFactory
     public static function createTaskHandlerFromString(
         WorkbenchInterface $workbench,
         string $aliasWithVersion
+    ) : AiTaskHandlerInterface
+    {
+        return static::createConfiguredTaskHandler($workbench, $aliasWithVersion);
+    }
+
+    // Generated by GitHub Copilot - Nov-26-2026
+    /**
+     * Loads the versioned task handler, optionally overriding its connection without persisting it.
+     */
+    private static function createConfiguredTaskHandler(
+        WorkbenchInterface $workbench,
+        string $aliasWithVersion,
+        ?string $connectionAlias = null
     ) : AiTaskHandlerInterface
     {
         list($alias, $versionConstraint) = array_pad(explode(':', $aliasWithVersion, 2), 2, '*');
@@ -471,7 +683,10 @@ abstract class AiFactory extends AbstractSelectableComponentFactory
             $uxon->setProperty('instructions', $agentRow['INSTRUCTIONS']);
         }
         
-        if ($requiresConnection) {
+        if ($requiresConnection && $connectionAlias !== null) {
+            DataConnectionFactory::createFromModel($workbench, $connectionAlias);
+            $uxon->setProperty('data_connection_alias', $connectionAlias);
+        } elseif ($requiresConnection) {
             // Make sure, there is an LLM connection. If there is one defined, use it regularly. If not,
             // see if the previous version had one and inherit it.
             if (null !== $val = $agentRow['DATA_CONNECTION']) {

@@ -1,0 +1,101 @@
+{
+    "uid": "0x78d75505b73144149a63c78139baf6b5",
+    "alias_with_namespace": "axenox.genai.workflows",
+    "menu_parent_page_selector": "0x11efb71bcc0c07e2b71b025041000001",
+    "menu_index": 9,
+    "menu_visible": true,
+    "name": "AI Workflows",
+    "description": "Create and manage persisted AI workflows",
+    "intro": "",
+    "replaces_page_selector": null,
+    "created_by_user_selector": "0x31000000000000000000000000000000",
+    "created_on": "2026-09-27 12:00:00",
+    "modified_by_user_selector": "0x31000000000000000000000000000000",
+    "modified_on": "2026-09-27 12:00:00",
+    "icon": "project-diagram",
+    "icon_set": "fa",
+    "contents": {
+        "widget_type": "SplitVertical",
+        "object_alias": "axenox.GenAI.AI_WORKFLOW",
+        "panels": [
+            {
+                "height": "60%",
+                "widgets": [
+                    {
+                        "widget_type": "DataTable",
+                        "object_alias": "axenox.GenAI.AI_WORKFLOW",
+                        "id": "workflows_table",
+                        "filters": [
+                            {
+                                "attribute_alias": "NAME"
+                            },
+                            {
+                                "attribute_alias": "ALIAS_WITH_NS"
+                            },
+                            {
+                                "attribute_alias": "APP"
+                            },
+                            {
+                                "attribute_alias": "PROTOTYPE_CLASS"
+                            }
+                        ],
+                        "columns": [
+                            {
+                                "attribute_alias": "NAME"
+                            },
+                            {
+                                "attribute_alias": "ALIAS_WITH_NS"
+                            },
+                            {
+                                "attribute_alias": "APP"
+                            },
+                            {
+                                "attribute_alias": "PROTOTYPE_CLASS"
+                            },
+                            {
+                                "attribute_alias": "DESCRIPTION"
+                            },
+                            {
+                                "attribute_alias": "FLOW_DIAGRAM",
+                                "hidden": true
+                            }
+                        ],
+                        "sorters": [
+                            {
+                                "attribute_alias": "NAME",
+                                "direction": "asc"
+                            }
+                        ],
+                        "buttons": [
+                            {
+                                "action_alias": "exface.Core.ShowObjectCreateDialog"
+                            },
+                            {
+                                "action_alias": "exface.Core.ShowObjectEditDialog",
+                                "bind_to_double_click": true
+                            },
+                            {
+                                "action_alias": "exface.Core.DeleteObject",
+                                "visibility": "optional"
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
+                "caption": "Flow diagram",
+                "widgets": [
+                    {
+                        "widget_type": "InputMarkdown",
+                        "render_mermaid_diagrams": true,
+                        "value": "=workflows_table!FLOW_DIAGRAM",
+                        "disabled": true,
+                        "hide_caption": true,
+                        "width": "100%",
+                        "height": "100%"
+                    }
+                ]
+            }
+        ]
+    }
+}
