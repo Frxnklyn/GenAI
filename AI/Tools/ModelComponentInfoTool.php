@@ -10,6 +10,7 @@ use axenox\GenAI\Interfaces\AiToolResultInterface;
 use exface\Core\CommonLogic\Actions\ServiceParameter;
 use exface\Core\CommonLogic\UxonObject;
 use exface\Core\DataTypes\MarkdownDataType;
+use exface\Core\DataTypes\ModelComponentDataType;
 use exface\Core\Factories\DataTypeFactory;
 use exface\Core\Interfaces\DataTypes\DataTypeInterface;
 use exface\Core\Interfaces\WorkbenchInterface;
@@ -17,13 +18,29 @@ use exface\Core\Interfaces\WorkbenchInterface;
 /**
  * Get detailed information about any model component: object, action, page, etc.
  * 
+ * ```json
+ * {"alias": "axenox.GenAI.ModelComponentInfoTool"}
  * 
+ * ```
+ * 
+ * 
+ * 
+ * @author GitHub Copilot
  */
 class ModelComponentInfoTool extends AbstractAiTool
 {
     const ARG_COMPONENT = 'component';
     const ARG_SELECTOR = 'selector';
 
+    /**
+     * Executes the configured tool and returns its typed outcome.
+     * 
+     * @throws AiToolRuntimeWarning
+     * @param AiTaskHandlerInterface $agent
+     * @param TaskInterface $prompt
+     * @param array<array-key,mixed> $arguments
+     * @return AiToolResultInterface
+     */
     public function invoke(AiTaskHandlerInterface $agent, TaskInterface $prompt, array $arguments): AiToolResultInterface
     {
         list($component, $selector) = $arguments;
@@ -37,20 +54,24 @@ class ModelComponentInfoTool extends AbstractAiTool
                 throw new AiToolRuntimeWarning($this, $prompt, 'No documentation found for component ' . $component . ' with selector ' . $selector);
         }
         
-        return new AiToolResultString($this, $arguments, $markdown, $this->getReturnDataType());
+        return new AiToolResultString($this->getWorkbench(), $markdown, $this->getReturnDataType());
     }
 
+    /**
+     * Builds the default argument definitions for this tool.
+     * 
+     * @param WorkbenchInterface $workbench
+     * @return array<array-key,mixed>
+     */
     protected static function getArgumentsTemplates(WorkbenchInterface $workbench): array
     {
         $self = new self($workbench);
-        $allComponents = $workbench->getComponentRegistry()->getComponentKeys();
         return [
             (new ServiceParameter($self))
                 ->setName(self::ARG_COMPONENT)
                 ->setDescription('Component type (e.g. `action`) or the corresponding')
                 ->setDataType(new UxonObject([
-                    'alias' => 'exface.Core.GenericStringEnum',
-                    'values' => array_combine($allComponents, $allComponents)
+                    'alias' => ModelComponentDataType::class
                 ])),
             (new ServiceParameter($self))
                 ->setName(self::ARG_SELECTOR)

@@ -11,6 +11,7 @@ use exface\Core\CommonLogic\Actions\ServiceParameter;
 use exface\Core\CommonLogic\UxonObject;
 use exface\Core\DataTypes\ComparatorDataType;
 use exface\Core\DataTypes\MarkdownDataType;
+use exface\Core\DataTypes\ModelComponentDataType;
 use exface\Core\Factories\DataSheetFactory;
 use exface\Core\Factories\DataTypeFactory;
 use exface\Core\Interfaces\DataSheets\DataSheetInterface;
@@ -33,6 +34,11 @@ use exface\Core\Interfaces\WorkbenchInterface;
  * - `OBJECT_NAME`, `INSTANCE_NAME`, `ATTRIBUTE_NAME`, `APP__ALIAS`,
  *   `INSTANCE_ALIAS`, `OBJECT_TYPE`, `TABLE_NAME`.
  *
+ * ```json
+ * {"alias": "axenox.GenAI.ModelSearchTool"}
+ * 
+ * ```
+ * 
  * @author Brooklyn Fraenzschky
  */
 class ModelSearchTool extends AbstractAiTool
@@ -50,7 +56,7 @@ class ModelSearchTool extends AbstractAiTool
      */
     public function invoke(AiTaskHandlerInterface $agent, TaskInterface $prompt, array $arguments): AiToolResultInterface
     {
-        list($query, $component, $limit, $offset) = array_pad($arguments, 4, null);
+        list($query, $component, $limit, $offset) = $arguments;
         
         if (! $query) {
             throw new AiToolRuntimeError($this, $prompt, 'Missing required argument: search_query');
@@ -74,9 +80,15 @@ class ModelSearchTool extends AbstractAiTool
         }
         $sheet->dataRead();
 
-        return new AiToolResultString($this, $arguments, $this->buildMarkdownSearchResult($sheet), $this->getReturnDataType());
+        return new AiToolResultString($this->getWorkbench(), $this->buildMarkdownSearchResult($sheet), $this->getReturnDataType());
     }
     
+    /**
+     * Build Markdown Search Result.
+     * 
+     * @param DataSheetInterface $resultSheet
+     * @return string
+     */
     protected function buildMarkdownSearchResult(DataSheetInterface $resultSheet) : string
     {
         $rows = [];
@@ -99,7 +111,6 @@ class ModelSearchTool extends AbstractAiTool
     protected static function getArgumentsTemplates(WorkbenchInterface $workbench): array
     {
         $self = new self($workbench);
-        $allComponents = $workbench->getComponentRegistry()->getComponentKeys();
 
         return [
             (new ServiceParameter($self))
@@ -115,8 +126,7 @@ class ModelSearchTool extends AbstractAiTool
                 ->setName(self::ARG_COMPONENT)
                 ->setDescription('Optional component type filter (for example `object`, `attribute`, `page`, `action`), using the same component types as ModelComponentInfoTool')
                 ->setDataType(new UxonObject([
-                    'alias' => 'exface.Core.GenericStringEnum',
-                    'values' => array_combine($allComponents, $allComponents)
+                    'alias' => ModelComponentDataType::class
                 ]))
                 ->setRequired(false),
             (new ServiceParameter($self))
