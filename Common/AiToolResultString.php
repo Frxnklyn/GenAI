@@ -1,6 +1,7 @@
 <?php
 namespace axenox\GenAI\Common;
 
+use axenox\GenAI\Interfaces\AiToolResultAttachmentsInterface;
 use axenox\GenAI\Interfaces\AiToolResultInterface;
 use exface\Core\CommonLogic\Traits\ICanBeConvertedToUxonTrait;
 use exface\Core\CommonLogic\UxonObject;
@@ -12,11 +13,12 @@ use exface\Core\Exceptions\InternalError;
 use exface\Core\Factories\DataTypeFactory;
 use exface\Core\Interfaces\DataTypes\DataTypeInterface;
 use exface\Core\Interfaces\Exceptions\ExceptionInterface;
+use exface\Core\Interfaces\Filesystem\FileInfoInterface;
 use exface\Core\Interfaces\Log\LoggerInterface;
 use exface\Core\Interfaces\WorkbenchInterface;
 
 /**
- * Retain a textual tool result with ordered diagnostics and optional supplementary instructions.
+ * Retain a textual tool result, its generated files, ordered diagnostics and optional supplementary instructions.
  * 
  * Results can be restored without the original tool. For example:
  *
@@ -32,7 +34,7 @@ use exface\Core\Interfaces\WorkbenchInterface;
  * 
  * @author GitHub Copilot
  */
-class AiToolResultString implements AiToolResultInterface
+class AiToolResultString implements AiToolResultAttachmentsInterface
 {
     use ICanBeConvertedToUxonTrait;
 
@@ -46,6 +48,7 @@ class AiToolResultString implements AiToolResultInterface
     private array $operationalErrors = [];
     private bool $failed = false;
     private ?float $durationMs = null;
+    private array $attachments = [];
 
     /**
      * Creates a detached result; exceptions are classified only during fresh execution.
@@ -55,14 +58,16 @@ class AiToolResultString implements AiToolResultInterface
      * @param DataTypeInterface|null $type
      * @param string[] $appendix
      * @param \Throwable[] $exceptions
+     * @param FileInfoInterface[] $attachments
      * @return void
      */
-    public function __construct(WorkbenchInterface $workbench, mixed $value = '', ?DataTypeInterface $type = null, array $appendix = [], array $exceptions = [])
+    public function __construct(WorkbenchInterface $workbench, mixed $value = '', ?DataTypeInterface $type = null, array $appendix = [], array $exceptions = [], array $attachments = [])
     {
         $this->workbench = $workbench;
         $this->setValue($value);
         $this->type = $type;
         $this->appendix = $appendix;
+        $this->setAttachments($attachments);
         foreach ($exceptions as $exception) {
             $this->addException($exception);
         }
@@ -75,6 +80,44 @@ class AiToolResultString implements AiToolResultInterface
     public function getValue() : string
     {
         return $this->value;
+    }
+
+    /**
+     * {@inheritDoc}
+     * @see AiToolResultAttachmentsInterface::getAttachments()
+     */
+    public function getAttachments() : array
+    {
+        return $this->attachments;
+    }
+
+    /**
+     * Returns a copy with files produced by the tool call.
+     *
+     * @param FileInfoInterface[] $attachments
+     * @return AiToolResultAttachmentsInterface
+     */
+    public function withAttachments(array $attachments) : AiToolResultAttachmentsInterface
+    {
+        $clone = clone $this;
+        $clone->setAttachments($attachments);
+        return $clone;
+    }
+
+    /**
+     * Validates files retained with this tool result.
+     *
+     * @param FileInfoInterface[] $attachments
+     * @return void
+     */
+    private function setAttachments(array $attachments) : void
+    {
+        foreach ($attachments as $attachment) {
+            if (! $attachment instanceof FileInfoInterface) {
+                throw new \InvalidArgumentException('Tool result attachments must be instances of FileInfoInterface.');
+            }
+        }
+        $this->attachments = array_values($attachments);
     }
 
     /**

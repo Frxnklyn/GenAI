@@ -10,6 +10,7 @@ use axenox\GenAI\Common\Messages\InstructionsMessage;
 use axenox\GenAI\Common\Messages\OutputMessage;
 use axenox\GenAI\Common\Messages\ToolCallMessage;
 use axenox\GenAI\DataTypes\AiMessageTypeDataType;
+use exface\Core\CommonLogic\Filesystem\InMemoryFile;
 use exface\Core\CommonLogic\Workbench;
 use exface\Core\Exceptions\RuntimeException;
 use exface\Core\Interfaces\Log\LoggerInterface;
@@ -90,6 +91,45 @@ class AiMessageSerializerTest extends TestCase
         self::assertSame(['First error'], $restoredResult->getErrors());
         self::assertTrue($restoredResult->isFailed());
         self::assertSame($freshText, $restoredResult->getValueWithMetadata());
+    }
+
+    /**
+     * Tool result file references and their loaded files survive message restoration.
+     *
+     * @return void
+     */
+    public function testToolResultAttachmentsSurviveSerialization() : void
+    {
+        $workbench = new Workbench();
+        $serializer = new AiMessageSerializer($workbench);
+        $references = [
+            'call_file' => [[
+                'uid' => 'file_uid',
+                'path' => 'data/axenox/GenAI/Conversations/message/file_uid.pdf',
+                'filename' => 'report.pdf',
+                'mime_type' => 'application/pdf',
+                'sha256' => hash('sha256', '%PDF-report')
+            ]]
+        ];
+        $message = (new ToolCallMessage('', [new AiToolCall('CreateFile', 'call_file', new \stdClass())]))
+            ->withToolResults([
+                'call_file' => new AiToolResultString($workbench, 'Created report', null, [], [], [
+                    new InMemoryFile('%PDF-report', 'report.pdf', 'application/pdf')
+                ])
+            ]);
+        $data = $serializer->toData($message, $references);
+        $json = $serializer->encode($data);
+        $restored = $serializer->fromRow(
+            $this->row(AiMessageTypeDataType::TOOL),
+            $serializer->decode($json),
+            [],
+            ['call_file' => [new InMemoryFile('%PDF-report', 'report.pdf', 'application/pdf')]]
+        );
+
+        self::assertSame($references, $serializer->getToolResultAttachmentReferences($serializer->decode($json)));
+        self::assertSame('report.pdf', $restored->getToolResults()['call_file']->getAttachments()[0]->getFilename());
+        self::assertSame('%PDF-report', $restored->getToolResults()['call_file']->getAttachments()[0]->openFile()->read());
+        self::assertSame($json, $serializer->encode($serializer->toData($restored, $references)));
     }
 
     /**

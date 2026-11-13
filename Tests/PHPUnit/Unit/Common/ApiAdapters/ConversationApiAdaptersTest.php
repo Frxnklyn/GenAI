@@ -474,6 +474,52 @@ class ConversationApiAdaptersTest extends TestCase
     }
 
     /**
+     * User and tool files stay attached to their own input items in Responses requests.
+     *
+     * @return void
+     */
+    public function testResponsesSendsToolResultAttachmentsWithFunctionCallOutput() : void
+    {
+        $workbench = new Workbench();
+        $userFile = new InMemoryFile('%PDF-user', 'user.pdf', 'application/pdf');
+        $toolFile = new InMemoryFile('%PDF-tool', 'tool.pdf', 'application/pdf');
+        $toolMessage = (new ToolCallMessage('', [new AiToolCall('CreateFile', 'call_file', new \stdClass())]))
+            ->withToolResults([
+                'call_file' => new AiToolResultString($workbench, 'Created report', null, [], [], [$toolFile])
+            ]);
+        $native = json_decode($this->buildRequest('responses', $workbench, [
+            new InputMessage('Use this source', [$userFile]),
+            $toolMessage
+        ]), true, 512, JSON_THROW_ON_ERROR);
+
+        self::assertSame('user', $native['input'][0]['role']);
+        self::assertSame('user.pdf', $native['input'][0]['content'][1]['filename']);
+        self::assertSame('data:application/pdf;base64,' . base64_encode('%PDF-user'), $native['input'][0]['content'][1]['file_data']);
+        self::assertSame('function_call', $native['input'][1]['type']);
+        self::assertSame('function_call_output', $native['input'][2]['type']);
+        self::assertSame('call_file', $native['input'][2]['call_id']);
+        self::assertSame('Created report', $native['input'][2]['output'][0]['text']);
+        self::assertSame('tool.pdf', $native['input'][2]['output'][1]['filename']);
+        self::assertSame('data:application/pdf;base64,' . base64_encode('%PDF-tool'), $native['input'][2]['output'][1]['file_data']);
+
+        $completionsQuery = new AiQuery($workbench, null, [
+            new InputMessage('Use this source'),
+            $toolMessage
+        ]);
+        $completions = json_decode(
+            $this->createRequestAdapter('completions', $workbench)->buildBody($completionsQuery),
+            true,
+            512,
+            JSON_THROW_ON_ERROR
+        );
+        self::assertSame(
+            "Created report\n\n[tool.pdf was attached but cannot be sent to this model]",
+            $completions['messages'][2]['content']
+        );
+        self::assertCount(1, $completionsQuery->getWarnings());
+    }
+
+    /**
      * Claude rejects empty text blocks - tool call messages without text produce none.
      * 
      * @return void

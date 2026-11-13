@@ -17,6 +17,7 @@ use axenox\GenAI\DataTypes\AiFinishReasonDataType;
 use axenox\GenAI\Factories\AiFactory;
 use axenox\GenAI\Interfaces\AiToolCallMessageInterface;
 use axenox\GenAI\Interfaces\HttpResponseAdapterInterface;
+use exface\Core\CommonLogic\Filesystem\InMemoryFile;
 use exface\Core\CommonLogic\Selectors\DataConnectorSelector;
 use exface\Core\CommonLogic\DataSheets\CrudCounter;
 use exface\Core\CommonLogic\UxonObject;
@@ -232,6 +233,7 @@ class ConversationPersistenceTest extends TestCase
         restore_exception_handler();
         $conversationId = null;
         $attachmentPath = null;
+        $toolAttachmentPath = null;
         $file = tempnam(sys_get_temp_dir(), 'genai-replay-');
         self::assertNotFalse($file);
         $bytes = base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aO5sAAAAASUVORK5CYII=', true);
@@ -265,7 +267,16 @@ class ConversationPersistenceTest extends TestCase
                 $results = [];
                 foreach ($query->getToolCalls() as $call) {
                     $recordId = $conversation->saveToolCallStart($messageId, $call);
-                    $result = new AiToolResultString($workbench, $call->getCallId() === 'second' ? 'partial 00123' : 'retained result ' . $round);
+                    $result = new AiToolResultString(
+                        $workbench,
+                        $call->getCallId() === 'second' ? 'partial 00123' : 'retained result ' . $round,
+                        null,
+                        [],
+                        [],
+                        $round === 1 && $call->getCallId() === 'second'
+                            ? [new InMemoryFile($bytes, 'tool-output.png', 'image/png')]
+                            : []
+                    );
                     if ($call->getCallId() === 'second') {
                         $result->importUxonObject(new UxonObject([
                             'failed' => true, 'errors' => ['first error', 'second error'],
@@ -277,6 +288,9 @@ class ConversationPersistenceTest extends TestCase
                     $results[$call->getCallId()] = $result;
                 }
                 $conversation->saveToolResults($messageId, $results);
+                if ($round === 1) {
+                    $toolAttachmentPath = $this->readData($workbench, $messageId)->results[1]->attachments[0]->path;
+                }
             }
             $adapter = $this->response($source, '{"answer":"00123","retained":{"object":{},"list":[]}}');
             $query = (new AiQuery($workbench))->withResponse(new Response(), $adapter);
@@ -329,6 +343,13 @@ class ConversationPersistenceTest extends TestCase
                 self::assertSame([], $storedCalls->getToolResults()['second']->getExceptions());
                 self::assertSame(['first error', 'second error'], $storedCalls->getToolResults()['second']->getErrors());
                 self::assertTrue($storedCalls->getToolResults()['second']->isFailed());
+                $toolAttachment = $storedCalls->getToolResults()['second']->getAttachments()[0];
+                self::assertTrue($toolAttachment->exists());
+                self::assertSame($bytes, $toolAttachment->openFile()->read());
+                self::assertSame(
+                    hash('sha256', $bytes),
+                    $this->readData($workbench, $storedCalls->getUid())->results[1]->attachments[0]->sha256
+                );
                 $attachment = $conversation->getMessages('user')[0]->getAttachments()[0];
                 self::assertTrue($attachment->exists());
                 self::assertSame($bytes, $attachment->openFile()->read());
@@ -354,7 +375,20 @@ class ConversationPersistenceTest extends TestCase
                 $body = $requestAdapter->buildBody($query);
                 $wire = json_decode($body, false, 512, JSON_THROW_ON_ERROR);
                 $this->assertProtocol($target, $wire);
-                self::assertSame([], $query->getWarnings());
+                if ($target === 'responses') {
+                    self::assertSame([], $query->getWarnings());
+                    $toolResultOutput = array_values(array_filter(
+                        $wire->input,
+                        static fn($item) => ($item->type ?? '') === 'function_call_output' && $item->call_id === 'second'
+                    ))[0];
+                    self::assertSame('input_image', $toolResultOutput->output[1]->type);
+                    self::assertSame(
+                        'data:image/png;base64,' . base64_encode($bytes),
+                        $toolResultOutput->output[1]->image_url
+                    );
+                } else {
+                    self::assertCount(1, $query->getWarnings());
+                }
                 self::assertStringContainsString(base64_encode($bytes), $body);
                 $rows = DataSheetFactory::createFromObjectIdOrAlias($workbench, 'axenox.GenAI.AI_MESSAGE');
                 $rows->getColumns()->addMultiple(['ROLE', 'DATA', 'ERROR_LOG_ID', 'TOKENS_PROMPT', 'TOKENS_COMPLETION']);
@@ -393,9 +427,12 @@ class ConversationPersistenceTest extends TestCase
             if ($conversationId !== null) {
                 $cleanup = McpWorkbenchScope::start();
                 try {
-                    if ($attachmentPath !== null) {
+                    foreach ([$attachmentPath, $toolAttachmentPath] as $path) {
+                        if ($path === null) {
+                            continue;
+                        }
                         $sheet = DataSheetFactory::createFromObjectIdOrAlias($cleanup, 'axenox.GenAI.AI_MESSAGE_FILE');
-                        $sheet->getFilters()->addConditionFromString('PATHNAME_RELATIVE', $attachmentPath, ComparatorDataType::EQUALS);
+                        $sheet->getFilters()->addConditionFromString('PATHNAME_RELATIVE', $path, ComparatorDataType::EQUALS);
                         $sheet->dataDelete();
                     }
                     foreach (['AI_TOOL_CALL', 'AI_MESSAGE', 'AI_CONVERSATION'] as $alias) {

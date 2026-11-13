@@ -126,9 +126,10 @@ abstract class AiFactory extends AbstractSelectableComponentFactory
      * @throws UxonParserError
      * @param WorkbenchInterface $workbench
      * @param UxonObject $uxon
+     * @param \exface\Core\Interfaces\Filesystem\FileInfoInterface[] $attachments
      * @return AiToolResultInterface
      */
-    public static function createToolResult(WorkbenchInterface $workbench, UxonObject $uxon) : AiToolResultInterface
+    public static function createToolResult(WorkbenchInterface $workbench, UxonObject $uxon, array $attachments = []) : AiToolResultInterface
     {
         $class = ltrim((string) $uxon->getProperty('class'), '\\');
         if ($class !== AiToolResultString::class) {
@@ -136,7 +137,7 @@ abstract class AiFactory extends AbstractSelectableComponentFactory
         }
         $result = new AiToolResultString($workbench);
         $result->importUxonObject($uxon, ['class']);
-        return $result;
+        return $result->withAttachments($attachments);
     }
 
     /**

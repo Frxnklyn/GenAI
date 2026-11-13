@@ -7,6 +7,7 @@ use axenox\GenAI\Interfaces\AiMessageInterface;
 use axenox\GenAI\Interfaces\AiQueryInterface;
 use axenox\GenAI\Interfaces\AiToolCallInterface;
 use axenox\GenAI\Interfaces\AiToolCallMessageInterface;
+use axenox\GenAI\Interfaces\AiToolResultAttachmentsInterface;
 use axenox\GenAI\Interfaces\AiToolResultInterface;
 use exface\Core\Interfaces\Filesystem\FileInfoInterface;
 use exface\Core\Interfaces\Filesystem\FileInterface;
@@ -179,6 +180,27 @@ trait ConversationApiAdapterTrait
             'value' => $value, 'failed' => $result->isFailed(), 'errors' => $result->getErrors(),
             'warnings' => $result->getWarnings(), 'appendix' => $appendix
         ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    }
+
+    /**
+     * Renders a text-only tool result and explicitly notes files unsupported by that provider.
+     *
+     * @param AiQueryInterface $query
+     * @param AiToolResultInterface $result
+     * @param array<string,bool> $appendixSeen
+     * @return string
+     */
+    protected function buildToolResultTextWithAttachmentNotes(AiQueryInterface $query, AiToolResultInterface $result, array &$appendixSeen) : string
+    {
+        $text = $this->buildToolResultText($result, $appendixSeen);
+        if (! $result instanceof AiToolResultAttachmentsInterface) {
+            return $text;
+        }
+        foreach ($result->getAttachments() as $file) {
+            $query->addWarning('Tool result attachment "' . $file->getFilename() . '" cannot be sent to this API - replaced by a note.');
+            $text = $this->appendNote($text, $this->buildAttachmentNote($file));
+        }
+        return $text;
     }
 
     /**

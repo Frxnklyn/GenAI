@@ -156,7 +156,7 @@ class ClaudeMessagesApiRequestAdapter implements HttpRequestAdapterInterface, Ht
                 $blocks[] = [
                     'type' => 'tool_result', 
                     'tool_use_id' => $this->mapCallId($message, $call->getCallId(), $idState),
-                    'content' => $this->buildToolResultText($result, $appendixSeen),
+                    'content' => $this->buildToolResultTextWithAttachmentNotes($query, $result, $appendixSeen),
                     'is_error' => $result->isFailed()
                 ];
             }

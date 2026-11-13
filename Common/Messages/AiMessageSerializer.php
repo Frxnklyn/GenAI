@@ -23,7 +23,7 @@ use exface\Core\Interfaces\WorkbenchInterface;
  *     "text": "I will check the current time.",
  *     "attachments": [{"uid": "", "path": "", "filename": "photo.png", "mime_type": "image/png", "sha256": ""}],
  *     "calls": [{"call_id": "call_1", "tool_name": "GetTime", "tool_alias": null, "arguments": {}, "raw_arguments": "{}", "execution_arguments": []}],
- *     "results": [{"call_id": "call_1", "class": "\\axenox\\GenAI\\Common\\AiToolResultString", "value": "2026-11-10 08:00:00"}],
+ *     "results": [{"call_id": "call_1", "class": "\\axenox\\GenAI\\Common\\AiToolResultString", "value": "2026-11-10 08:00:00", "attachments": [{"path": "...", "filename": "report.pdf"}]}],
  *     "adapters": {"<adapter key>": {}},
  *     "usage": {"model": null, "tokens_prompt": null, "tokens_completion": null, "cost": null, "finish_reason": "completed"}
  * }
@@ -65,13 +65,13 @@ final class AiMessageSerializer
     /**
      * Returns the persisted representation of the message itself (without conversation metadata)
      * 
-     * Attachment references are not included - they are added by the conversation after it saved
-     * the files.
+     * Message and tool-result attachment references are added by the conversation after it saves the files.
      * 
      * @param AbstractAiMessage $message
+     * @param array<string,array<int,array<string,mixed>>> $toolResultAttachmentReferences
      * @return array<string,mixed>
      */
-    public function toData(AbstractAiMessage $message) : array
+    public function toData(AbstractAiMessage $message, array $toolResultAttachmentReferences = []) : array
     {
         $data = ['text' => $message->getText()];
         if ($message instanceof AiToolCallMessageInterface) {
@@ -81,7 +81,11 @@ final class AiMessageSerializer
             }
             $data['results'] = [];
             foreach ($message->getToolResults() as $callId => $result) {
-                $data['results'][] = ['call_id' => (string) $callId] + $result->exportUxonObject()->toArray();
+                $entry = ['call_id' => (string) $callId] + $result->exportUxonObject()->toArray();
+                if (($toolResultAttachmentReferences[$callId] ?? []) !== []) {
+                    $entry['attachments'] = $toolResultAttachmentReferences[$callId];
+                }
+                $data['results'][] = $entry;
             }
         }
         if ([] !== $adapterData = $message->getAdapterDataAll()) {
@@ -178,8 +182,40 @@ final class AiMessageSerializer
                 $refs[] = $block;
             }
         }
+        return $this->normalizeAttachmentReferences($refs);
+    }
+
+    /**
+     * Returns stored attachment references grouped by the tool call that produced them.
+     *
+     * @param array<string,mixed> $data
+     * @return array<string,array<int,array<string,mixed>>>
+     */
+    public function getToolResultAttachmentReferences(array $data) : array
+    {
+        $result = [];
+        foreach ($this->toList($data['results'] ?? null) as $entry) {
+            $entry = (array) $entry;
+            $callId = $entry['call_id'] ?? null;
+            if (! is_string($callId) || $callId === '') {
+                continue;
+            }
+            $result[$callId] = $this->normalizeAttachmentReferences($this->toList($entry['attachments'] ?? null));
+        }
+        return array_filter($result);
+    }
+
+    /**
+     * Validates attachment references read from persisted message data.
+     *
+     * @param array<int,mixed> $refs
+     * @return array<int,array<string,mixed>>
+     */
+    private function normalizeAttachmentReferences(array $refs) : array
+    {
         $result = [];
         foreach ($refs as $ref) {
+            $ref = (array) $ref;
             if (! is_string($ref['path'] ?? null) || $ref['path'] === '') {
                 continue;
             }
@@ -214,9 +250,10 @@ final class AiMessageSerializer
      * @param array<string,mixed> $row
      * @param array<string,mixed> $data
      * @param FileInfoInterface[] $attachments
+     * @param array<string,FileInfoInterface[]> $toolResultAttachments
      * @return AbstractAiMessage
      */
-    public function fromRow(array $row, array $data, array $attachments = []) : AbstractAiMessage
+    public function fromRow(array $row, array $data, array $attachments = [], array $toolResultAttachments = []) : AbstractAiMessage
     {
         $type = $this->getType($row);
         $adapterData = $this->restoreAdapterData($data);
@@ -231,7 +268,7 @@ final class AiMessageSerializer
                 $message = new OutputMessage($this->restoreText($row, $data), $attachments, $adapterData);
                 break;
             case AiMessageTypeDataType::TOOL:
-                [$calls, $results] = $this->restoreCalls($data);
+                [$calls, $results] = $this->restoreCalls($data, $toolResultAttachments);
                 $message = new ToolCallMessage($this->restoreText($row, $data, ''), $calls, $results, $adapterData);
                 break;
             default:
@@ -306,7 +343,7 @@ final class AiMessageSerializer
      * @param array<string,mixed> $data
      * @return array{0: AiToolCallInterface[], 1: array<string,\axenox\GenAI\Interfaces\AiToolResultInterface>}
      */
-    private function restoreCalls(array $data) : array
+    private function restoreCalls(array $data, array $toolResultAttachments = []) : array
     {
         $calls = [];
         $ids = [];
@@ -359,13 +396,14 @@ final class AiMessageSerializer
                 continue;
             }
             unset($entry['call_id']);
+            unset($entry['attachments']);
             foreach (['type', 'appendix', 'errors', 'warnings'] as $property) {
                 if (isset($entry[$property])) {
                     $entry[$property] = (array) $entry[$property];
                 }
             }
             try {
-                $results[$id] = AiFactory::createToolResult($this->workbench, new UxonObject($entry));
+                $results[$id] = AiFactory::createToolResult($this->workbench, new UxonObject($entry), $toolResultAttachments[$id] ?? []);
             } catch (\Throwable $e) {
                 continue;
             }
