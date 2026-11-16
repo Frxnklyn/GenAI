@@ -27,6 +27,8 @@
 -- content (absent, null or text). Reject pairs with usage on BOTH sides: even
 -- zero is known usage, and adding or selecting such values would be ambiguous.
 -- Snapshot the original payloads and row metadata before any persistent update.
+-- Compare JSON type names as binary: MariaDB may use a different collation
+-- for JSON_TYPE() results than for connection string literals.
 DROP TEMPORARY TABLE IF EXISTS genai_legacy_pairs;
 CREATE TEMPORARY TABLE genai_legacy_pairs AS
 SELECT q.oid AS request_oid, r.oid AS result_oid,
@@ -72,12 +74,12 @@ JOIN exf_ai_message q ON q.oid = timeline.oid
 JOIN exf_ai_message r ON r.oid = timeline.next_oid
 WHERE q.role = 'tool calling' AND r.role = 'tool'
     AND JSON_VALID(q.data) AND JSON_VALID(r.data)
-    AND JSON_TYPE(JSON_EXTRACT(q.data, '$.tool_calls')) = 'ARRAY'
-    AND JSON_TYPE(JSON_EXTRACT(r.data, '$')) = 'ARRAY'
+    AND BINARY JSON_TYPE(JSON_EXTRACT(q.data, '$.tool_calls')) = 'ARRAY'
+    AND BINARY JSON_TYPE(JSON_EXTRACT(r.data, '$')) = 'ARRAY'
     AND JSON_LENGTH(q.data, '$.tool_calls') > 0
     AND JSON_LENGTH(q.data, '$.tool_calls') = JSON_LENGTH(r.data)
     AND (JSON_EXTRACT(q.data, '$.content') IS NULL
-        OR JSON_TYPE(JSON_EXTRACT(q.data, '$.content')) IN ('NULL', 'STRING'))
+        OR BINARY JSON_TYPE(JSON_EXTRACT(q.data, '$.content')) IN ('NULL', 'STRING'))
     AND NOT (
         (q.tokens_prompt IS NOT NULL OR q.tokens_completion IS NOT NULL
             OR q.cost IS NOT NULL)
@@ -95,24 +97,24 @@ CREATE TEMPORARY TABLE genai_legacy_calls AS
 SELECT p.request_oid, p.result_oid, p.call_count, j.ord,
     j.call_id, s.call_id AS result_call_id,
     COALESCE(
-        IF(JSON_TYPE(JSON_EXTRACT(s.result_json, '$.value')) = 'STRING',
+        IF(BINARY JSON_TYPE(JSON_EXTRACT(s.result_json, '$.value')) = 'STRING',
             JSON_UNQUOTE(JSON_EXTRACT(s.result_json, '$.value')), NULL),
-        IF(JSON_TYPE(s.result_json) = 'STRING',
+        IF(BINARY JSON_TYPE(s.result_json) = 'STRING',
             JSON_UNQUOTE(s.result_json), NULL), d.result) AS retained_value,
     JSON_OBJECT('call_id', j.call_id, 'tool_name', j.tool_name,
-        'arguments', CASE WHEN JSON_TYPE(j.arguments_json) = 'STRING'
+        'arguments', CASE WHEN BINARY JSON_TYPE(j.arguments_json) = 'STRING'
             THEN JSON_EXTRACT(
                 IF(JSON_VALID(JSON_UNQUOTE(j.arguments_json)),
                     JSON_UNQUOTE(j.arguments_json), 'null'), '$')
             ELSE j.arguments_json END,
-        'raw_arguments', IF(JSON_TYPE(j.arguments_json) = 'STRING',
+        'raw_arguments', IF(BINARY JSON_TYPE(j.arguments_json) = 'STRING',
             JSON_UNQUOTE(j.arguments_json), NULL),
         'tool_alias', d.tool_alias,
         'started_on', d.started_on, 'finished_on', d.finished_on,
         'duration_ms', d.execution_time_ms) AS call_data,
-    CASE WHEN JSON_TYPE(j.arguments_json) IN ('OBJECT', 'ARRAY')
-        OR (JSON_TYPE(j.arguments_json) = 'STRING'
-            AND JSON_TYPE(JSON_EXTRACT(
+    CASE WHEN BINARY JSON_TYPE(j.arguments_json) IN ('OBJECT', 'ARRAY')
+        OR (BINARY JSON_TYPE(j.arguments_json) = 'STRING'
+            AND BINARY JSON_TYPE(JSON_EXTRACT(
                 IF(JSON_VALID(JSON_UNQUOTE(j.arguments_json)),
                     JSON_UNQUOTE(j.arguments_json), 'null'), '$')) IN ('OBJECT', 'ARRAY'))
         THEN 1 ELSE 0 END AS arguments_valid,
@@ -144,8 +146,8 @@ CREATE TEMPORARY TABLE genai_legacy_valid AS
             AND BINARY call_id = BINARY result_call_id
             AND retained_value IS NOT NULL
             AND arguments_valid = 1
-            AND JSON_TYPE(JSON_EXTRACT(call_data, '$.tool_name')) = 'STRING'
-            AND JSON_UNQUOTE(JSON_EXTRACT(call_data, '$.tool_name')) <> '', 0)) = 1
+            AND BINARY JSON_TYPE(JSON_EXTRACT(call_data, '$.tool_name')) = 'STRING'
+            AND BINARY JSON_UNQUOTE(JSON_EXTRACT(call_data, '$.tool_name')) <> '', 0)) = 1
 ;
 -- Reject every uncertain batch, not merely the uncertain call.
 -- Delete candidates only from staging, not from history. Also reject any pair
@@ -160,17 +162,28 @@ WHERE valid.request_oid IS NULL
                 AND BINARY c.call_id = BINARY d.call_id
                 AND c.ord = d.call_index));
 
--- 4. Build the new ordered lists. The full window frame gives every staged
--- call the complete batch; DISTINCT leaves one aggregate row per request.
+-- 4. Append calls in ordinal order using a cursor: MariaDB does not support
+-- JSON_ARRAYAGG as a window function. Avoid GROUP_CONCAT and its length limit.
 -- All results use AiToolResultString, preserving JSON-looking output as text.
 -- Retain failure state, diagnostic arrays, appendix and known execution time.
 -- Omit unknown result duration instead of passing null to its typed setter.
 -- These embedded diagnostics are replay data, not additional warning/error rows.
 DROP TEMPORARY TABLE IF EXISTS genai_legacy_merged;
-CREATE TEMPORARY TABLE genai_legacy_merged AS
-SELECT DISTINCT c.request_oid,
-    JSON_ARRAYAGG(c.call_data) OVER w AS calls_data,
-    JSON_ARRAYAGG(JSON_MERGE_PATCH(JSON_OBJECT(
+CREATE TEMPORARY TABLE genai_legacy_merged (
+    request_oid binary(16) NOT NULL PRIMARY KEY,
+    calls_data longtext CHARACTER SET utf8mb4 NOT NULL,
+    results_data longtext CHARACTER SET utf8mb4 NOT NULL
+);
+DROP PROCEDURE IF EXISTS genai_merge_legacy_tool_batches;
+CREATE PROCEDURE genai_merge_legacy_tool_batches()
+BEGIN
+    DECLARE done BOOLEAN DEFAULT FALSE;
+    DECLARE v_request_oid binary(16);
+    DECLARE v_call_data longtext CHARACTER SET utf8mb4;
+    DECLARE v_result_data longtext CHARACTER SET utf8mb4;
+    DECLARE calls_cursor CURSOR FOR
+    SELECT c.request_oid, c.call_data,
+        JSON_MERGE_PATCH(JSON_OBJECT(
         'call_id', c.call_id,
         'class', '\\axenox\\GenAI\\Common\\AiToolResultString',
         'type', JSON_OBJECT('alias', 'exface.Core.String'),
@@ -179,19 +192,40 @@ SELECT DISTINCT c.request_oid,
             c.state = 'FAILED'
             OR JSON_EXTRACT(c.result_json, '$.failed') = TRUE,
             'true', 'false'), '$'),
-        'errors', IF(JSON_TYPE(JSON_EXTRACT(c.result_json, '$.errors')) = 'ARRAY',
+        'errors', IF(BINARY JSON_TYPE(JSON_EXTRACT(c.result_json, '$.errors')) = 'ARRAY',
             JSON_EXTRACT(c.result_json, '$.errors'), JSON_ARRAY()),
         'warnings', IF(
-            JSON_TYPE(JSON_EXTRACT(c.result_json, '$.warnings')) = 'ARRAY',
+            BINARY JSON_TYPE(JSON_EXTRACT(c.result_json, '$.warnings')) = 'ARRAY',
             JSON_EXTRACT(c.result_json, '$.warnings'), JSON_ARRAY()),
-        'appendix', IF(JSON_TYPE(JSON_EXTRACT(c.result_json, '$.appendix')) = 'ARRAY',
+        'appendix', IF(BINARY JSON_TYPE(JSON_EXTRACT(c.result_json, '$.appendix')) = 'ARRAY',
             JSON_EXTRACT(c.result_json, '$.appendix'), JSON_ARRAY())
     ), IF(c.execution_time_ms IS NULL, JSON_OBJECT(),
-        JSON_OBJECT('duration_ms', c.execution_time_ms)))) OVER w AS results_data
-FROM genai_legacy_calls c
-JOIN genai_legacy_pairs p ON p.request_oid = c.request_oid
-WINDOW w AS (PARTITION BY c.request_oid ORDER BY c.ord
-    ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING);
+        JSON_OBJECT('duration_ms', c.execution_time_ms)))
+    FROM genai_legacy_calls c
+    JOIN genai_legacy_pairs p ON p.request_oid = c.request_oid
+    ORDER BY c.request_oid, c.ord;
+    DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = TRUE;
+
+    OPEN calls_cursor;
+    calls_loop: LOOP
+        FETCH calls_cursor INTO v_request_oid, v_call_data, v_result_data;
+        IF done THEN
+            LEAVE calls_loop;
+        END IF;
+        INSERT INTO genai_legacy_merged (request_oid, calls_data, results_data)
+        VALUES (v_request_oid,
+            JSON_ARRAY(JSON_EXTRACT(v_call_data, '$')),
+            JSON_ARRAY(JSON_EXTRACT(v_result_data, '$')))
+        ON DUPLICATE KEY UPDATE
+            calls_data = JSON_ARRAY_APPEND(calls_data, '$',
+                JSON_EXTRACT(v_call_data, '$')),
+            results_data = JSON_ARRAY_APPEND(results_data, '$',
+                JSON_EXTRACT(v_result_data, '$'));
+    END LOOP;
+    CLOSE calls_cursor;
+END;
+CALL genai_merge_legacy_tool_batches();
+DROP PROCEDURE genai_merge_legacy_tool_batches;
 
 -- 5. Enrich ONLY the surviving result row. MESSAGE is deliberately not assigned.
 -- Request text becomes semantic content, not the result's display text.
@@ -204,7 +238,7 @@ JOIN genai_legacy_pairs p ON p.result_oid = r.oid
 JOIN exf_ai_message q ON q.oid = p.request_oid
 JOIN genai_legacy_merged b ON b.request_oid = p.request_oid
 SET r.data = JSON_OBJECT(
-        'content', IF(JSON_TYPE(JSON_EXTRACT(p.request_data, '$.content'))
+        'content', IF(BINARY JSON_TYPE(JSON_EXTRACT(p.request_data, '$.content'))
             = 'STRING', JSON_ARRAY(JSON_OBJECT('type', 'text',
                 'text', JSON_UNQUOTE(
                     JSON_EXTRACT(p.request_data, '$.content')))), JSON_ARRAY()),
