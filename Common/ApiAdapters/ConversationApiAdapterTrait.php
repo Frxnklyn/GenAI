@@ -7,7 +7,6 @@ use axenox\GenAI\Interfaces\AiMessageInterface;
 use axenox\GenAI\Interfaces\AiQueryInterface;
 use axenox\GenAI\Interfaces\AiToolCallInterface;
 use axenox\GenAI\Interfaces\AiToolCallMessageInterface;
-use axenox\GenAI\Interfaces\AiToolResultAttachmentsInterface;
 use axenox\GenAI\Interfaces\AiToolResultInterface;
 use exface\Core\Interfaces\Filesystem\FileInfoInterface;
 use exface\Core\Interfaces\Filesystem\FileInterface;
@@ -193,9 +192,6 @@ trait ConversationApiAdapterTrait
     protected function buildToolResultTextWithAttachmentNotes(AiQueryInterface $query, AiToolResultInterface $result, array &$appendixSeen) : string
     {
         $text = $this->buildToolResultText($result, $appendixSeen);
-        if (! $result instanceof AiToolResultAttachmentsInterface) {
-            return $text;
-        }
         foreach ($result->getAttachments() as $file) {
             $query->addWarning('Tool result attachment "' . $file->getFilename() . '" cannot be sent to this API - replaced by a note.');
             $text = $this->appendNote($text, $this->buildAttachmentNote($file));

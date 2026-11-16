@@ -289,6 +289,12 @@ class ConversationPersistenceTest extends TestCase
                 }
                 $conversation->saveToolResults($messageId, $results);
                 if ($round === 1) {
+                    $liveMessage = $conversation->getMessages('tool')[0];
+                    self::assertSame($results['second'], $liveMessage->getToolResults()['second']);
+                    $sourceAttachment = $results['second']->getAttachments()[0];
+                    self::assertInstanceOf(InMemoryFile::class, $sourceAttachment);
+                    $sourceAttachment->write('changed after saving');
+                    self::assertSame('changed after saving', $liveMessage->getToolResults()['second']->getAttachments()[0]->openFile()->read());
                     $toolAttachmentPath = $this->readData($workbench, $messageId)->results[1]->attachments[0]->path;
                 }
             }

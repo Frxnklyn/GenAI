@@ -28,6 +28,12 @@ lebenden Tool oder Aufrufargumenten. Ergebnis-UXON enthaelt `class`, Datentyp `t
 `failed`, `appendix`, `errors` und `warnings`. Nur unterstuetzte Ergebnisklassen werden
 rekonstruiert. Gespeicherte Diagnosen benoetigen weder Exceptions noch die alte Tool-Konfiguration.
 
+`AiToolResultInterface::getAttachments()` liefert die Dateien eines einzelnen Tool-Aufrufs
+oder ein leeres Array. Dateien werden beim Erzeugen von `AiToolResultString` uebergeben;
+eigene Ergebnisimplementierungen muessen `getAttachments()` implementieren. In der laufenden
+Conversation werden die urspruenglichen Dateiobjekte verwendet, beim erneuten Laden die
+gespeicherten Dateikopien.
+
 ## Ein Tool auswählen
 
 | Anforderung | Empfohlenes Tool |

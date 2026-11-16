@@ -135,9 +135,9 @@ abstract class AiFactory extends AbstractSelectableComponentFactory
         if ($class !== AiToolResultString::class) {
             throw new UxonParserError($uxon, 'Unsupported stored AI tool result class: ' . $class);
         }
-        $result = new AiToolResultString($workbench);
+        $result = new AiToolResultString($workbench, attachments: $attachments);
         $result->importUxonObject($uxon, ['class']);
-        return $result->withAttachments($attachments);
+        return $result;
     }
 
     /**

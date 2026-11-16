@@ -10,6 +10,7 @@ use axenox\GenAI\Common\Messages\InstructionsMessage;
 use axenox\GenAI\Common\Messages\OutputMessage;
 use axenox\GenAI\Common\Messages\ToolCallMessage;
 use axenox\GenAI\DataTypes\AiMessageTypeDataType;
+use axenox\GenAI\Interfaces\AiToolResultInterface;
 use exface\Core\CommonLogic\Filesystem\InMemoryFile;
 use exface\Core\CommonLogic\Workbench;
 use exface\Core\Exceptions\RuntimeException;
@@ -25,6 +26,26 @@ use PHPUnit\Framework\TestCase;
  */
 class AiMessageSerializerTest extends TestCase
 {
+    /**
+     * The common result contract exposes files provided at construction.
+     *
+     * @return void
+     */
+    public function testToolResultAttachmentContract() : void
+    {
+        $workbench = new Workbench();
+        $file = new InMemoryFile('%PDF-report', 'report.pdf', 'application/pdf');
+        $result = new AiToolResultString($workbench, 'report', null, [], [], [$file]);
+
+        self::assertInstanceOf(AiToolResultInterface::class, $result);
+        self::assertSame([], (new AiToolResultString($workbench))->getAttachments());
+        self::assertSame([$file], $result->getAttachments());
+        self::assertSame('report', $result->getValue());
+
+        $this->expectException(\InvalidArgumentException::class);
+        new AiToolResultString($workbench, 'report', null, [], [], ['not a file']);
+    }
+
     /**
      * Numeric-looking strings, empty objects/lists and results survive storage.
      * 

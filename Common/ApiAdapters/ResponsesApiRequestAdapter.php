@@ -5,7 +5,6 @@ use axenox\GenAI\Interfaces\AiMessageInterface;
 use axenox\GenAI\Interfaces\AiConnectorInterface;
 use axenox\GenAI\Interfaces\AiQueryInterface;
 use axenox\GenAI\Interfaces\AiToolCallMessageInterface;
-use axenox\GenAI\Interfaces\AiToolResultAttachmentsInterface;
 use axenox\GenAI\Interfaces\AiToolInterface;
 use axenox\GenAI\Interfaces\AiToolResultInterface;
 use axenox\GenAI\Interfaces\HttpRequestAdapterInterface;
@@ -357,7 +356,7 @@ class ResponsesApiRequestAdapter implements HttpRequestAdapterInterface, HttpReq
     private function buildToolResultOutput(AiQueryInterface $query, AiToolResultInterface $result, array &$appendixSeen) : string|array
     {
         $text = $this->buildToolResultText($result, $appendixSeen);
-        $attachments = $result instanceof AiToolResultAttachmentsInterface ? $result->getAttachments() : [];
+        $attachments = $result->getAttachments();
         if ($attachments === []) {
             return $text;
         }

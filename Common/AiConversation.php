@@ -20,7 +20,6 @@ use axenox\GenAI\Interfaces\AiQueryInterface;
 use axenox\GenAI\Interfaces\AiTaskHandlerInterface;
 use axenox\GenAI\Interfaces\AiToolCallInterface;
 use axenox\GenAI\Interfaces\AiToolCallMessageInterface;
-use axenox\GenAI\Interfaces\AiToolResultAttachmentsInterface;
 use axenox\GenAI\Interfaces\AiToolResultInterface;
 use exface\Core\CommonLogic\Filesystem\InMemoryFile;
 use exface\Core\DataTypes\ComparatorDataType;
@@ -444,27 +443,22 @@ class AiConversation implements AiConversationInterface
     }
 
     /**
-     * Persists files under their tool-call results and returns normalized results plus their references.
+     * Persists files under their tool-call results and returns their references.
      *
      * @param string $messageId
      * @param array<string,AiToolResultInterface> $results
-     * @return array{0:array<string,AiToolResultInterface>,1:array<string,array<int,array<string,mixed>>>,2:string[]}
+     * @return array{0:array<string,array<int,array<string,mixed>>>,1:string[]}
      */
     private function persistToolResultAttachments(string $messageId, array $results) : array
     {
-        $normalizedResults = $results;
         $references = [];
         $paths = [];
         try {
             foreach ($results as $callId => $result) {
-                if (! $result instanceof AiToolResultAttachmentsInterface) {
-                    continue;
-                }
                 $files = $result->getAttachments();
                 if ($files === []) {
                     continue;
                 }
-                $storedFiles = [];
                 foreach ($files as $file) {
                     $identity = bin2hex(random_bytes(16));
                     $filename = $file->getFilename();
@@ -473,11 +467,6 @@ class AiConversation implements AiConversationInterface
                     $path = "data/axenox/GenAI/Conversations/{$messageId}/{$identity}" . ($extension === '' ? '' : '.' . $extension);
                     if (! $file->exists()) {
                         $this->saveWarnings(['Tool result attachment "' . $file->getFilename() . '" could not be saved because it is not available.']);
-                        $storedFiles[] = new UnavailableAttachment(
-                            $filename,
-                            $mimeType,
-                            'file is not available'
-                        );
                         $references[$callId][] = [
                             'uid' => $identity,
                             'path' => $path,
@@ -504,15 +493,13 @@ class AiConversation implements AiConversationInterface
                         'mime_type' => $mimeType,
                         'sha256' => hash('sha256', $contents)
                     ];
-                    $storedFiles[] = new InMemoryFile($contents, $filename, $mimeType);
                 }
-                $normalizedResults[$callId] = $result->withAttachments($storedFiles);
             }
         } catch (\Throwable $error) {
             $this->deleteStoredAttachmentPaths($paths);
             throw $error;
         }
-        return [$normalizedResults, $references, $paths];
+        return [$references, $paths];
     }
 
     /**
@@ -809,7 +796,7 @@ class AiConversation implements AiConversationInterface
             }
         }
 
-        [$results, $toolResultAttachmentReferences, $storedAttachmentPaths] = $this->persistToolResultAttachments($messageId, $results);
+        [$toolResultAttachmentReferences, $storedAttachmentPaths] = $this->persistToolResultAttachments($messageId, $results);
         $completed = $message->withToolResults($results);
         $this->liveMessages[$messageId] = $completed;
 

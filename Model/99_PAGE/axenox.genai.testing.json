@@ -34,6 +34,10 @@
                         ],
                         "columns": [
                             {
+                                "attribute_alias": "AI_AGENT",
+                                "hidden": true
+                            },
+                            {
                                 "attribute_alias": "AI_AGENT__LABEL"
                             },
                             {
@@ -69,6 +73,27 @@
                             },
                             {
                                 "action_alias": "exface.Core.ShowObjectCopyDialog"
+                            },
+                            {
+                                "caption": "Open Agent",
+                                "hint": "Open the agent assigned to the selected test case",
+                                "icon": "external-link",
+                                "action": {
+                                    "alias": "exface.Core.ShowObjectEditDialog",
+                                    "object_alias": "axenox.GenAI.AI_AGENT",
+                                    "input_rows_min": 1,
+                                    "input_rows_max": 1,
+                                    "input_mapper": {
+                                        "from_object_alias": "axenox.GenAI.AI_TEST_CASE",
+                                        "to_object_alias": "axenox.GenAI.AI_AGENT",
+                                        "column_to_column_mappings": [
+                                            {
+                                                "from": "AI_AGENT",
+                                                "to": "UID"
+                                            }
+                                        ]
+                                    }
+                                }
                             },
                             {
                                 "action_alias": "axenox.GenAI.AiTestCaseRunTest",
