@@ -341,9 +341,10 @@ final class AiMessageSerializer
      * Restores calls and results, skipping entries that cannot be restored
      * 
      * @param array<string,mixed> $data
+     * @param array<string,FileInfoInterface[]> $toolResultAttachments
      * @return array{0: AiToolCallInterface[], 1: array<string,\axenox\GenAI\Interfaces\AiToolResultInterface>}
      */
-    private function restoreCalls(array $data, array $toolResultAttachments = []) : array
+    private function restoreCalls(array $data, array $toolResultAttachments) : array
     {
         $calls = [];
         $ids = [];
