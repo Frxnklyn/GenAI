@@ -192,7 +192,7 @@
                     "metamodel_docs": {
                         "alias": "axenox.GenAI.AppDocsConcept",
                         "app_alias": "exface.Core",
-                        "starting_page": "understanding_the_metamodel/index.md",
+                        "starting_page": "Metamodel/index.md",
                         "depth": 1,
                         "heading_level": 3,
                         "hide_title": false
@@ -208,7 +208,7 @@
                     "apps_docs": {
                         "alias": "axenox.GenAI.AppDocsConcept",
                         "app_alias": "exface.Core",
-                        "starting_page": "understanding_the_metamodel/App_metamodel.md",
+                        "starting_page": "Metamodel/App_metamodel.md",
                         "depth": 1,
                         "heading_level": 3,
                         "hide_title": false
@@ -216,7 +216,7 @@
                     "aliases_selectors_docs": {
                         "alias": "axenox.GenAI.AppDocsConcept",
                         "app_alias": "exface.Core",
-                        "starting_page": "understanding_the_metamodel/Aliases_and_selectors.md",
+                        "starting_page": "Metamodel/Aliases_and_selectors.md",
                         "depth": 1,
                         "heading_level": 3,
                         "hide_title": false
@@ -224,7 +224,7 @@
                     "data_sources_docs": {
                         "alias": "axenox.GenAI.AppDocsConcept",
                         "app_alias": "exface.Core",
-                        "starting_page": "understanding_the_metamodel/data_sources_and_connections.md",
+                        "starting_page": "Metamodel/data_sources_and_connections.md",
                         "depth": 1,
                         "heading_level": 3,
                         "hide_title": false
@@ -232,7 +232,7 @@
                     "behaviors_docs": {
                         "alias": "axenox.GenAI.AppDocsConcept",
                         "app_alias": "exface.Core",
-                        "starting_page": "understanding_the_metamodel/Behaviors_of_meta_objects.md",
+                        "starting_page": "Metamodel/Behaviors_of_meta_objects.md",
                         "depth": 1,
                         "heading_level": 3,
                         "hide_title": false
@@ -240,7 +240,7 @@
                     "prototypes_docs": {
                         "alias": "axenox.GenAI.AppDocsConcept",
                         "app_alias": "exface.Core",
-                        "starting_page": "understanding_the_metamodel/prototypes.md",
+                        "starting_page": "Metamodel/prototypes.md",
                         "depth": 1,
                         "heading_level": 3,
                         "hide_title": false
