@@ -14,6 +14,7 @@ use axenox\GenAI\DataTypes\AiMessageTypeDataType;
 use axenox\GenAI\Interfaces\AiToolResultInterface;
 use exface\Core\CommonLogic\Filesystem\InMemoryFile;
 use exface\Core\CommonLogic\Workbench;
+use exface\Core\Exceptions\InvalidArgumentException;
 use exface\Core\Exceptions\RuntimeException;
 use exface\Core\Interfaces\Log\LoggerInterface;
 use PHPUnit\Framework\TestCase;
@@ -43,7 +44,7 @@ class AiMessageSerializerTest extends TestCase
         self::assertSame([$file], $result->getAttachments());
         self::assertSame('report', $result->getValue());
 
-        $this->expectException(\InvalidArgumentException::class);
+        $this->expectException(InvalidArgumentException::class);
         new AiToolResultString($workbench, 'report', null, [], [], ['not a file']);
     }
 

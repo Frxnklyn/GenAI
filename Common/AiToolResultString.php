@@ -9,6 +9,7 @@ use exface\Core\DataTypes\HtmlDataType;
 use exface\Core\DataTypes\LogLevelDataType;
 use exface\Core\DataTypes\MarkdownDataType;
 use exface\Core\Exceptions\InternalError;
+use exface\Core\Exceptions\InvalidArgumentException;
 use exface\Core\Factories\DataTypeFactory;
 use exface\Core\Interfaces\DataTypes\DataTypeInterface;
 use exface\Core\Interfaces\Exceptions\ExceptionInterface;
@@ -68,7 +69,7 @@ class AiToolResultString implements AiToolResultInterface
         $this->appendix = $appendix;
         foreach ($attachments as $attachment) {
             if (! $attachment instanceof FileInfoInterface) {
-                throw new \InvalidArgumentException('Tool result attachments must be instances of FileInfoInterface.');
+                throw new InvalidArgumentException('Tool result attachments must be instances of FileInfoInterface.');
             }
         }
         $this->attachments = array_values($attachments);
