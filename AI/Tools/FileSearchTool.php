@@ -49,6 +49,25 @@ use Symfony\Component\Finder\Finder;
  * 
  * ```
  * 
+ * ## Example output
+ * 
+ * Searching with `path="exface/core/Docs/**"`, `name="*.md"` and
+ * `query="JsonEditor.md"` returns Markdown like this with the default configuration:
+ * 
+ * ```markdown
+ * Search result for `*.md` in path `exface/core/Docs/**` within base `/vendor`. Only including files containing `JsonEditor.md`.
+ * 
+ * - `exface/core/Docs/developer_docs/Facades/Common_JS_libraries/index.md`
+ * > L4: - [JSON and UXON editing with JSONEditor](JsonEditor.md)
+ * - `exface/core/Docs/developer_docs/Facades/index.md`
+ * > L5: - [JSON and UXON editing with JSONEditor](Common_JS_libraries/JsonEditor.md)
+ * 
+ * ```
+ * 
+ * Each matching file is listed once. Extracts include source line numbers and
+ * are omitted when `include_extract_line` is `false` or no content query is supplied.
+ * If nothing matches, the result is `- No matches found.`.
+ * 
  * @author GitHub Copilot
  */
 class FileSearchTool extends AbstractAiTool
@@ -73,7 +92,7 @@ class FileSearchTool extends AbstractAiTool
         return [
             (new ServiceParameter($self))
                 ->setName(self::ARG_PATH)
-                ->setDescription('Folder to search in (relative to the vendor folder). Supports wildcards: `*` matches a single path segment, `**` matches any depth. E.g. `exface/core/Actions`, `*/*/Actions` or `axenox/**`. Use as narrow patterns as possible for better performance!')
+                ->setDescription('Folder to search in (relative to the vendor folder). Supports wildcards: `*` matches a single path segment, `**` matches any depth. Without `**`, only files directly inside the matched folders are searched, not their subfolders. E.g. `*` searches files directly inside first-level vendor folders; `exface/core/Docs/**` searches documentation recursively. Other examples: `exface/core/Actions`, `*/*/Actions` or `axenox/**`. Use as narrow patterns as possible for better performance!')
                 ->setExamples(['exface/core/Actions', '*/*/Actions', 'axenox/**'])
                 ->setRequired(true),
             (new ServiceParameter($self))

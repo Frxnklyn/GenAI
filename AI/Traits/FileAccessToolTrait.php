@@ -47,10 +47,10 @@ trait FileAccessToolTrait
     private static ?array $instructionFiles = null;
 
     /**
-     * Base path for all files.
+     * Base path for all files - absolute or relative to installation or vendor folder (see `use_vendor_folder_as_base`).
      *
-     * If this value is relative, it is resolved against the default base path
-     * selected by `use_vendor_folder_as_base`.
+     * If this value is relative, it is resolved against the default base path selected by `use_vendor_folder_as_base`:
+     * either the installation root folder or the vendor folder in it.
      *
      * @uxon-property base_path
      * @uxon-type string
@@ -81,10 +81,17 @@ trait FileAccessToolTrait
     }
 
     /**
-     * Restrict accessible files using wildcard patterns.
+     * Restrict accessible files using wildcard patterns relative to base.
      *
      * Patterns are matched against the normalized relative path (using `/` as
      * separator) with `FilePathDataType::matchesPattern()`.
+     * 
+     * Relative paths are resolved against the base path configured by `base_path` and `use_vendor_folder_as_base`.
+     * 
+     * - Default: the installation’s vendor folder.
+     * - With `use_vendor_folder_as_base: false`: the installation root.
+     * - With `base_path` configured: that directory instead. A relative `base_path` is resolved against the folder 
+     * selected above; an absolute `base_path` is used directly.
      *
      * @uxon-property allowed_paths
      * @uxon-type string[]
@@ -390,14 +397,31 @@ trait FileAccessToolTrait
      */
     protected function makeRelativePath(string $absolutePath, string $basePath): string
     {
-        $baseNorm = FilePathDataType::normalize($basePath, '/');
-        $targetNorm = FilePathDataType::normalize($absolutePath, '/');
-        $needle = rtrim($baseNorm, '/') . '/';
-        $relative = StringDataType::substringAfter($targetNorm, $needle, null);
-        if ($relative === null || $relative === '') {
-            throw new RuntimeException('Cannot derive relative path from "' . $targetNorm . '" and base "' . $baseNorm . '".');
+        $baseNorm = rtrim(FilePathDataType::normalize($basePath, '/'), '/');
+        $targetNorm = rtrim(FilePathDataType::normalize($absolutePath, '/'), '/');
+
+        $pathsEqual = DIRECTORY_SEPARATOR === '\\'
+            ? strcasecmp($targetNorm, $baseNorm) === 0
+            : $targetNorm === $baseNorm;
+
+        // The base directory relative to itself is the empty path.
+        if ($pathsEqual) {
+            return '';
         }
-        return ltrim($relative, '/');
+
+        $needle = $baseNorm . '/';
+        $isInsideBase = DIRECTORY_SEPARATOR === '\\'
+            ? stripos($targetNorm, $needle) === 0
+            : str_starts_with($targetNorm, $needle);
+
+        if (! $isInsideBase) {
+            throw new RuntimeException(
+                'Cannot derive relative path from "' . $targetNorm
+                . '" and base "' . $baseNorm . '".'
+            );
+        }
+
+        return substr($targetNorm, strlen($needle));
     }
 
     /**

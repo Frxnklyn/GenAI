@@ -144,7 +144,7 @@ class GetDocsTool extends AbstractAiTool
         return [
             (new ServiceParameter($self))
                 ->setName(self::ARG_URI)
-                ->setDescription('Markdown file URL - absolute (with https://...) or relative to api/docs on this server')
+                ->setDescription('Markdown file URL - absolute (with https://...) or local ones relative to api/docs on this server')
         ];
     }
 
