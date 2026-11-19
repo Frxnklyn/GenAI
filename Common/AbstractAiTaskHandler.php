@@ -272,11 +272,15 @@ abstract class AbstractAiTaskHandler implements AiTaskHandlerInterface
         $warnings = $this->configureAdditionalTools($toolBox);
 
         foreach ($this->toolsUxon ?? [] as $toolName => $toolUxon) {
-            $toolBox->prepend(
-                AiFactory::createToolFromUxon($this->workbench, $toolUxon, $toolName),
-                $toolName,
-                'agent configuration'
-            );
+            try {
+                $toolBox->prepend(
+                    AiFactory::createToolFromUxon($this->workbench, $toolUxon, $toolName),
+                    $toolName,
+                    'agent configuration'
+                );
+            } catch (\Throwable $e) {
+                throw new AiAgentRuntimeError($this, 'Failed to load tool "' . $toolName . '" for agent "' . $this->getAliasWithNamespace() . '". ' . $e->getMessage(), null, $e);
+            }
         }
 
         $this->toolWarnings = array_merge($warnings, $toolBox->getWarnings());

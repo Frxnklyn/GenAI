@@ -9,7 +9,7 @@ class AiAgentRuntimeError extends RuntimeException
 {
     private AiTaskHandlerInterface $agent;
     
-    public function __construct(AiTaskHandlerInterface $agent, string $message, string $alias, \Throwable $previous = null)
+    public function __construct(AiTaskHandlerInterface $agent, string $message, ?string $alias = null, \Throwable $previous = null)
     {
         parent::__construct($message, $alias, $previous);
         $this->agent = $agent;
