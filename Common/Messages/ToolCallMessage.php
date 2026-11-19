@@ -138,8 +138,9 @@ class ToolCallMessage extends OutputMessage implements AiToolCallMessageInterfac
             $text .= '## ' . ($index + 1) . '. ' . MarkdownDataType::escapeString($call->getToolName()) . "()\n\n";
             $text .= StringDataType::indent((string) $call, '    ') . "\n\n";
             if (isset($this->results[$call->getCallId()])) {
+                $result = $this->results[$call->getCallId()];
                 $text .= MarkdownDataType::makeHorizontalLine();
-                $text .= $this->results[$call->getCallId()]->getValueAsMarkdown(true) . "\n\n";
+                $text .= MarkdownDataType::convertFrontMatterToMarkdown($result->getValueAsMarkdown(true)) . "\n\n";
             }
         }
         if (mb_strlen($text) <= self::MAX_MARKDOWN_LENGTH) {
