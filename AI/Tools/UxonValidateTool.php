@@ -20,14 +20,14 @@ use exface\Core\Interfaces\WorkbenchInterface;
 
 /**
  * Validates UXON and returns advisory diagnostics that an AI agent can use to correct it.
- *
+ * 
  * The tool can validate UXON against a schema and optionally provide the root object and
  * prototype context. Its validation creates mock model components and can therefore report
  * false positives. Agents should use the result as guidance rather than proof that UXON is
  * valid or invalid.
- *
+ * 
  * ## Example
- *
+ * 
  * ```json
  * {
  *   "alias": "axenox.GenAI.UxonValidateTool",
@@ -69,7 +69,7 @@ class UxonValidateTool extends AbstractAiTool
             $prototypeClass = $this->normalizePrototypeClass($prototypeSelector);
             /** @var UxonDataType $dataType */
             $dataType = DataTypeFactory::createFromString($this->getWorkbench(), UxonDataType::class);
-            $dataType->setSchema($schemaName);
+            $dataType->setSchema($schemaName ?? '');
             $diagnostics = array_map(
                 static fn(UxonValidationError $error): array => [
                     'path' => $error->getPath(),
@@ -147,7 +147,7 @@ class UxonValidateTool extends AbstractAiTool
                 ->setExamples(['\\exface\\Core\\Widgets\\DataTable', 'exface/Core/Widgets/DataTable.php']),
             (new ServiceParameter($self))
                 ->setName(self::ARG_SCHEMA)
-                ->setDescription('Optional UXON schema class or schema name used to interpret the UXON.')
+                ->setDescription('Optional UXON schema class or schema name used to interpret the UXON. Omit or leave empty to use the generic UXON schema.')
                 ->setRequired(false)
         ];
     }
