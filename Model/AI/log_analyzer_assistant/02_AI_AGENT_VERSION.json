@@ -205,7 +205,7 @@
         {
             "_EXPORT_SUMMARY": "Log analyzer assistant v2",
             "CREATED_ON": "2026-06-26 00:13:36",
-            "MODIFIED_ON": "2026-11-11 17:21:45",
+            "MODIFIED_ON": "2026-11-19 18:50:16",
             "CREATED_BY_USER": "0x31000000000000000000000000000000",
             "MODIFIED_BY_USER": "0x31000000000000000000000000000000",
             "UID": "0x11f1a5941ca61324a594025041000001",
@@ -214,50 +214,21 @@
             "CONFIG_UXON": {
                 "prompt_suggestions": [
                     "Help me to find out, what is the Error.",
-                    "Explain this log entry"
+                    "Explain this log entry",
+                    "I am a developer. Propose a fix"
                 ],
                 "tools": {
-                    "get_docs": {
+                    "GetDocs": {
                         "alias": "axenox.GenAI.GetDocsTool",
-                        "description": "Use this tool to request any link to documentation markdown files found in the data you receive. You can only request links you see in provided markdown docs, do not attempt to guess links - use other tools instead. ",
-                        "arguments": [
-                            {
-                                "name": "url",
-                                "data_type": {
-                                    "alias": "exface.Core.String"
-                                },
-                                "description": "Markdown file URL - absolute (with https://...) or local ones starting with `api/docs`"
-                            }
-                        ]
-                    },
-                    "get_log_entry": {
-                        "alias": "axenox.GenAI.GetLogEntryTool",
-                        "description": "Read another log entry by providing its Log-ID",
-                        "arguments": [
-                            {
-                                "name": "LogId",
-                                "data_type": {
-                                    "alias": "exface.Core.String"
-                                },
-                                "description": "The Log-ID visible to the designer or referenced in another log item. E.g. `AB8B3FD1`."
-                            }
-                        ]
-                    },
-                    "read_file": {
-                        "alias": "axenox.GenAI.FileReadTool",
-                        "description": "Read a file from the vendor folder. Use this tool to read code and comments from files affected by the error to gain more insights.",
-                        "arguments": [
-                            {
-                                "name": "path",
-                                "description": "Path to the file relative to the vendor folder: e.g. `axenox/packagemanager/AI/Tools/FileReadTool.php`."
-                            }
-                        ]
+                        "description": "Use this tool to request any link to documentation markdown files found in the data you receive. You can only request links you see in provided markdown docs, do not attempt to guess links - use other tools instead. "
                     }
                 },
                 "concepts": {
                     "errorlog": {
                         "alias": "axenox.GenAI.ToolCallConcept",
-                        "tool_name": "get_log_entry",
+                        "tool_definition": {
+                            "alias": "axenox.GenAI.GetLogEntryTool"
+                        },
                         "arguments": [
                             "[#~input:id#]"
                         ]
@@ -292,7 +263,7 @@
                 "1. Analyze the error log below.",
                 "2. Search for documentation, prototypes and model using your tools.",
                 "3. Look into the files, the stacktrace shows you",
-                "4. Read other log entries using `GetLogEntry(Log-ID)` if required.",
+                "4. Read other log entries if required.",
                 "5. Determine, who you are talking to and think of an appropriate solution.",
                 "",
                 "Answer as follows:",
@@ -304,12 +275,11 @@
                 "- If asked to explain a log entry, which is not an error, simply explain, what happens.",
                 "- Make sure, your answers are easy to understand for the user and fit his role.",
                 "  - Do not tell app designers to examine or change PHP or JavaScript code. They only can edit UXONs and only in apps of their clients (not in `exface.*` or `axenox.*`)",
+                "  - Tell developers which file and line number the need to look at.",
                 "",
                 "## Context",
                 "",
                 "When errors happen, all users will use a log viewer in the administration UI to get the details of the issue. When they open the log entry, they will see your chat right next to it.",
-                "",
-                "Each log message has a unique Log-ID. Log entries are very verbose: each message will contain a lot of details about the state of the workbench. Error messages will also contain links to the documentation pages related to the error. These docs contain detailed description of components involved, usage examples, etc. Make sure to read this documentation using the tool `GetDocs(url)`.",
                 "",
                 "The user is currently esxamining Log-ID `[#~input:id#]`. Here is its contents:",
                 "",

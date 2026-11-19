@@ -1,0 +1,160 @@
+{
+    "object_alias": "axenox.GenAI.AI_SKILL",
+    "columns": [
+        {
+            "name": "_EXPORT_SUMMARY",
+            "hidden": true,
+            "attribute_alias": "NAME"
+        },
+        {
+            "name": "CREATED_ON",
+            "attribute_alias": "CREATED_ON"
+        },
+        {
+            "name": "MODIFIED_ON",
+            "attribute_alias": "MODIFIED_ON"
+        },
+        {
+            "name": "CREATED_BY_USER",
+            "attribute_alias": "CREATED_BY_USER"
+        },
+        {
+            "name": "MODIFIED_BY_USER",
+            "attribute_alias": "MODIFIED_BY_USER"
+        },
+        {
+            "name": "UID",
+            "attribute_alias": "UID"
+        },
+        {
+            "name": "NAME",
+            "attribute_alias": "NAME"
+        },
+        {
+            "name": "ALIAS",
+            "attribute_alias": "ALIAS"
+        },
+        {
+            "name": "DESCRIPTION",
+            "attribute_alias": "DESCRIPTION"
+        },
+        {
+            "name": "APP",
+            "attribute_alias": "APP"
+        },
+        {
+            "name": "INSTRUCTIONS",
+            "attribute_alias": "INSTRUCTIONS"
+        },
+        {
+            "name": "CONFIG_UXON",
+            "attribute_alias": "CONFIG_UXON"
+        },
+        {
+            "name": "PROTOTYPE_CLASS",
+            "attribute_alias": "PROTOTYPE_CLASS"
+        }
+    ],
+    "rows": [
+        {
+            "_EXPORT_SUMMARY": "Read logs",
+            "CREATED_ON": "2026-11-19 17:35:26",
+            "MODIFIED_ON": "2026-11-19 18:41:06",
+            "CREATED_BY_USER": "0x31000000000000000000000000000000",
+            "MODIFIED_BY_USER": "0x31000000000000000000000000000000",
+            "UID": "0x11f1830f39c2a7ca830f025041000001",
+            "NAME": "Read logs",
+            "ALIAS": "LogsRead",
+            "DESCRIPTION": "Read log details, search log files",
+            "APP": "0x11efbd2d8f0ae0babd2dc84bd653ed63",
+            "INSTRUCTIONS": [
+                "// Multiline text delimited by `\n`",
+                "# Reading the logs",
+                "",
+                "The workbench has a central logger, that will save all logs as CSV files in `<installation>/logs/<yyyy-mm-dd>.<version>.log`. A log entry is represented as a csv line. Each log message has a unique Log-ID and consists of the CSV line and a JSON file with log details. The details files are located in `logs/details/<yyyy-mm-dd>/<Log-ID>.json`.",
+                "",
+                "CSV structure:",
+                "",
+                "1. KEY_DATETIME",
+                "2. Log-ID",
+                "3. Request-ID (X-Request-ID header)",
+                "4. Log-level (numeric)",
+                "5. Log-level (verbose)",
+                "6. Channel",
+                "7. Username (if known at the time of logging)",
+                "8. Action alias (if known at the time of logging)",
+                "9. Log message",
+                "",
+                "Use the Log-ID to fetch all details for a log entry via `GetLogDetails`. Log details are very verbose: each message will contain a lot of details about the state of the workbench. Error messages will also contain links to the documentation pages related to the error.",
+                "",
+                "Use `SearchLogs` to search for Request-ID to find all log lines related to this request. If an error occurs, the logger writes a lot of additional information with different log levels collected during the request. In particular, these log items are of interest:",
+                "",
+                "- `HTTP request ... received` - contains a dump of the HTTP request received",
+                "- `Authorized...` messages contain information about security policies evaluated to check access to something",
+                "- `Action ... performed` contains detailed action logbooks",
+                "- `Query ...` messages contain SQL, web service requests and other data source queries.",
+                "",
+                "The `SearchLogs` tool will do a plain file search in the CSV logs - you can search for messages, usernames, request ids - anything."
+            ],
+            "CONFIG_UXON": {
+                "tools": {
+                    "GetLogDetails": {
+                        "alias": "axenox.GenAI.GetLogEntryTool",
+                        "description": "Read another log entry by providing its Log-ID"
+                    },
+                    "SearchLogs": {
+                        "alias": "axenox.GenAI.FileSearchTool",
+                        "description": "Search the CSV log files",
+                        "use_vendor_folder_as_base": false,
+                        "allowed_paths": [
+                            "logs/*.log"
+                        ],
+                        "arguments": [
+                            {
+                                "name": "path",
+                                "description": "Folder to search in. Always use `logs/`"
+                            },
+                            {
+                                "name": "name",
+                                "description": "Optional filename pattern (glob) for log files"
+                            },
+                            {
+                                "name": "query",
+                                "description": "Optional string or regular expression to search for in log file contents.",
+                                "examples": [
+                                    "/->(CreateData|UpdateData)\\(.*/i"
+                                ]
+                            }
+                        ]
+                    }
+                }
+            },
+            "PROTOTYPE_CLASS": "axenox/genai/AI/Skills/GenericSkill.php"
+        }
+    ],
+    "totals_rows": [],
+    "filters": {
+        "operator": "AND",
+        "base_object_alias": "axenox.GenAI.AI_SKILL",
+        "conditions": [
+            {
+                "expression": "APP",
+                "comparator": "=",
+                "value": "0x11efbd2d8f0ae0babd2dc84bd653ed63",
+                "object_alias": "axenox.GenAI.AI_SKILL"
+            }
+        ]
+    },
+    "rows_limit": null,
+    "rows_offset": 0,
+    "sorters": [
+        {
+            "attribute_alias": "CREATED_ON",
+            "direction": "ASC"
+        },
+        {
+            "attribute_alias": "UID",
+            "direction": "ASC"
+        }
+    ]
+}
