@@ -45,7 +45,8 @@ Every persisted message conceptually consists of a content string and structured
 
 Tool-call messages show a numbered summary, a heading and argument block for each call, and
 its result separated by a horizontal line. Markdown and HTML results keep their formatting
-(including tables); plain text and code appear in code blocks. Designer previews are limited
+(including tables); leading YAML front matter is shown as a quoted code block rather than
+a heading. Plain text and code appear in code blocks. Designer previews are limited
 to 16,000 characters with an explicit truncation notice. Full results remain in message data
 and in the model context. This formatting applies to newly saved messages; existing log
 entries are not rewritten.

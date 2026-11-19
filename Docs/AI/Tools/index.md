@@ -315,9 +315,18 @@ replacement text
 | `name` | No | Filename glob; defaults to all files. |
 | `query` | No | Text or regular expression to find in file contents. |
 
-**How to use.** The model supplies a folder pattern, an optional filename glob, and an optional content query. A single `*` matches one path segment and `**` can span multiple levels. Use `include_extract_line` to control whether matching lines are included.
+**How to use.** The model supplies a folder pattern, an optional filename glob, and an optional content query. A single `*` matches one path segment and `**` can span multiple levels. Without `**`, only files directly inside the matched folders are searched, not their subfolders. With the default vendor base, `*` searches files directly inside first-level vendor folders, while `exface/core/Docs/**` searches the core documentation recursively. Use `include_extract_line` to control whether matching lines are included.
 
 **Result and limits.** The result lists matching paths and, when requested, matching line extracts. Avoid an unbounded `**` search from the vendor root. Narrow paths reduce execution time, disk access, and response size.
+
+**Example output.** A search with `path="exface/core/Docs/**"`, `name="*.md"` and `query="JsonEditor.md"` can include:
+
+```markdown
+- `exface/core/Docs/developer_docs/Facades/Common_JS_libraries/index.md`
+> L4: - [JSON and UXON editing with JSONEditor](JsonEditor.md)
+```
+
+The full result starts with a search summary. Extracts include source line numbers and are omitted when `include_extract_line` is `false` or no content query is supplied. If nothing matches, the result is `- No matches found.`.
 
 ## `SqlDbmlTool`
 
@@ -713,7 +722,7 @@ replacement text
 | `text` | No | Text typed so far, used to filter value and model-browser suggestions. |
 | `object` | No | Alias or UID of the root metaobject that supplies object context. |
 | `prototype` | No | Fully qualified root prototype class or PHP file path relative to the vendor folder. |
-| `schema` | No | UXON schema class or schema name used to interpret the UXON. |
+| `schema` | No | UXON schema class or schema name used to interpret the UXON. Omitted, `null`, or empty values use the generic UXON schema. |
 
 **How to use.** Pass the complete current UXON because sibling and parent properties can determine the applicable prototype and valid values. Use `field` to request property names and templates, and `value` to request values for the property addressed by `path`. Use `preset` for predefined structures, `details` for property documentation, and `modelbrowser` for structured metamodel entries. Supply reliable object and prototype context whenever available.
 

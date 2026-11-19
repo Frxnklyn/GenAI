@@ -46,6 +46,7 @@ Jede gespeicherte Nachricht besteht fachlich aus einem Content-String und strukt
 Tool-Nachrichten zeigen eine nummerierte Zusammenfassung, eine Ueberschrift und einen
 Argumentblock pro Aufruf sowie das durch eine horizontale Linie getrennte Ergebnis.
 Markdown- und HTML-Ergebnisse behalten ihre Formatierung (einschliesslich Tabellen);
+einleitendes YAML-Frontmatter erscheint als zitierter Codeblock statt als Ueberschrift.
 Klartext und Code erscheinen in Codebloecken. Die Designer-Vorschau ist auf 16.000 Zeichen
 mit einem ausdruecklichen Kuerzungshinweis begrenzt. Vollstaendige Ergebnisse bleiben in
 den Nachrichtendaten und im Modellkontext erhalten. Die Formatierung gilt fuer neu

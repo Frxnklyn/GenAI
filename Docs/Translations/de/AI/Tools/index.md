@@ -320,9 +320,18 @@ replacement text
 | `name` | Nein | Glob-Muster für Dateinamen; standardmäßig alle Dateien. |
 | `query` | Nein | Text oder regulärer Ausdruck, der in Dateiinhalten gesucht werden soll. |
 
-**Verwendung.** Das Modell übergibt ein Verzeichnismuster, optional ein Glob-Muster für Dateinamen und optional eine Inhaltssuche. Ein einzelnes `*` entspricht einem Pfadsegment, während `**` mehrere Ebenen umfassen kann. Mit `include_extract_line` legen Sie fest, ob passende Zeilen ausgegeben werden.
+**Verwendung.** Das Modell übergibt ein Verzeichnismuster, optional ein Glob-Muster für Dateinamen und optional eine Inhaltssuche. Ein einzelnes `*` entspricht einem Pfadsegment, während `**` mehrere Ebenen umfassen kann. Ohne `**` werden nur Dateien direkt in den passenden Verzeichnissen durchsucht, nicht deren Unterverzeichnisse. Mit dem standardmäßigen Vendor-Basisverzeichnis durchsucht `*` Dateien direkt in Vendor-Verzeichnissen der ersten Ebene, während `exface/core/Docs/**` die Core-Dokumentation rekursiv durchsucht. Mit `include_extract_line` legen Sie fest, ob passende Zeilen ausgegeben werden.
 
 **Ergebnis und Grenzen.** Das Ergebnis listet passende Pfade und bei Bedarf Auszüge passender Zeilen auf. Vermeiden Sie eine unbegrenzte `**`-Suche ab dem Vendor-Stammverzeichnis. Engere Pfade reduzieren Ausführungszeit, Festplattenzugriffe und Antwortgröße.
+
+**Beispielausgabe.** Eine Suche mit `path="exface/core/Docs/**"`, `name="*.md"` und `query="JsonEditor.md"` kann Folgendes enthalten:
+
+```markdown
+- `exface/core/Docs/developer_docs/Facades/Common_JS_libraries/index.md`
+> L4: - [JSON and UXON editing with JSONEditor](JsonEditor.md)
+```
+
+Das vollständige Ergebnis beginnt mit einer Zusammenfassung der Suche. Auszüge enthalten die Zeilennummern der Quelldatei und entfallen, wenn `include_extract_line` auf `false` gesetzt ist oder keine Inhaltssuche angegeben wurde. Ohne Treffer lautet das Ergebnis `- No matches found.`.
 
 ## `SqlDbmlTool`
 
@@ -718,7 +727,7 @@ replacement text
 | `text` | Nein | Bisher eingegebener Text zum Filtern von Wert- und Model-Browser-Vorschlägen. |
 | `object` | Nein | Alias oder UID des Wurzel-Metaobjekts, das den Objektkontext bereitstellt. |
 | `prototype` | Nein | Vollqualifizierte Wurzel-Prototypklasse oder PHP-Dateipfad relativ zum Vendor-Verzeichnis. |
-| `schema` | Nein | UXON-Schemaklasse oder Schemaname zur Interpretation des UXON. |
+| `schema` | Nein | UXON-Schemaklasse oder Schemaname zur Interpretation des UXON. Ohne Angabe, bei `null` oder einem leeren Wert wird das allgemeine UXON-Schema verwendet. |
 
 **Verwendung.** Übergeben Sie das vollständige aktuelle UXON, da Eigenschaften auf derselben oder einer übergeordneten Ebene den zutreffenden Prototyp und gültige Werte bestimmen können. Verwenden Sie `field` für Eigenschaftsnamen und Vorlagen sowie `value` für Werte der durch `path` adressierten Eigenschaft. `preset` liefert vordefinierte Strukturen, `details` Eigenschaftsdokumentation und `modelbrowser` strukturierte Metamodell-Einträge. Geben Sie verlässlichen Objekt- und Prototypkontext an, wann immer dieser verfügbar ist.
 
