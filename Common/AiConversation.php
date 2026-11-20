@@ -31,6 +31,7 @@ use exface\Core\Exceptions\RuntimeException;
 use exface\Core\Factories\DataSheetFactory;
 use exface\Core\Interfaces\DataSheets\DataSheetInterface;
 use exface\Core\Interfaces\Exceptions\ExceptionInterface;
+use exface\Core\Interfaces\Filesystem\FileInfoInterface;
 use exface\Core\Interfaces\Filesystem\FileInterface;
 use exface\Core\Interfaces\Log\LoggerInterface;
 use exface\Core\Interfaces\WorkbenchInterface;
@@ -300,7 +301,11 @@ class AiConversation implements AiConversationInterface
         $serializer = $this->getSerializer();
         foreach ($sheet->getRows() as $index => $row) {
             $data = $serializer->decode($row['DATA'] ?? null);
-            $message = $serializer->fromRow($row, $data, $this->loadAttachments($row, $data));
+            if ($serializer->getType($row) === AiMessageTypeDataType::TOOL) {
+                $message = $serializer->fromRow($row, $data, [], $this->loadToolResultAttachments($row, $data));
+            } else {
+                $message = $serializer->fromRow($row, $data, $this->loadAttachments($row, $data));
+            }
             $this->history[$message->getUid()] = $message;
             $this->messageData[$message->getUid()] = $data;
             $this->messageSystemRows[$message->getUid()] = $systemRows[$index];
@@ -442,6 +447,85 @@ class AiConversation implements AiConversationInterface
     }
 
     /**
+     * Persists files under their tool-call results and returns their references.
+     *
+     * @param string $messageId
+     * @param array<string,AiToolResultInterface> $results
+     * @return array{0:array<string,array<int,array<string,mixed>>>,1:string[]}
+     */
+    private function persistToolResultAttachments(string $messageId, array $results) : array
+    {
+        $references = [];
+        $paths = [];
+        try {
+            foreach ($results as $callId => $result) {
+                $files = $result->getAttachments();
+                if ($files === []) {
+                    continue;
+                }
+                foreach ($files as $file) {
+                    $identity = bin2hex(random_bytes(16));
+                    $filename = $file->getFilename();
+                    $mimeType = $file->getMimetype() ?? 'application/octet-stream';
+                    $extension = $file->getExtension();
+                    $path = "data/axenox/GenAI/Conversations/{$messageId}/{$identity}" . ($extension === '' ? '' : '.' . $extension);
+                    if (! $file->exists()) {
+                        $this->saveWarnings(['Tool result attachment "' . $file->getFilename() . '" could not be saved because it is not available.']);
+                        $references[$callId][] = [
+                            'uid' => $identity,
+                            'path' => $path,
+                            'filename' => $filename,
+                            'mime_type' => $mimeType,
+                            'sha256' => null
+                        ];
+                        continue;
+                    }
+                    $contents = $file instanceof FileInterface ? $file->read() : $file->openFile()->read();
+                    $sheet = DataSheetFactory::createFromObjectIdOrAlias($this->workbench, 'axenox.GenAI.AI_MESSAGE_FILE');
+                    $sheet->getColumns()->addMultiple(['PATHNAME_RELATIVE', 'CONTENTS']);
+                    $sheet->addRow([
+                        'AI_MESSAGE' => $messageId,
+                        'PATHNAME_RELATIVE' => $path,
+                        'CONTENTS' => $contents
+                    ]);
+                    $paths[] = $path;
+                    $sheet->dataCreate(false);
+                    $references[$callId][] = [
+                        'uid' => $identity,
+                        'path' => $path,
+                        'filename' => $filename,
+                        'mime_type' => $mimeType,
+                        'sha256' => hash('sha256', $contents)
+                    ];
+                }
+            }
+        } catch (\Throwable $error) {
+            $this->deleteStoredAttachmentPaths($paths);
+            throw $error;
+        }
+        return [$references, $paths];
+    }
+
+    /**
+     * Removes newly persisted attachment rows when saving their owning message fails.
+     *
+     * @param string[] $paths
+     * @return void
+     */
+    private function deleteStoredAttachmentPaths(array $paths) : void
+    {
+        foreach ($paths as $path) {
+            try {
+                $cleanup = DataSheetFactory::createFromObjectIdOrAlias($this->workbench, 'axenox.GenAI.AI_MESSAGE_FILE');
+                $cleanup->getFilters()->addConditionFromString('PATHNAME_RELATIVE', $path, ComparatorDataType::EQUALS);
+                $cleanup->dataDelete();
+            } catch (\Throwable $cleanupError) {
+                $this->reportOperationalError($cleanupError);
+            }
+        }
+    }
+
+    /**
      * Converts messages of other implementations into own message classes, so they can be saved
      * 
      * Opaque adapter data of foreign implementations cannot be enumerated and is dropped - this is
@@ -565,6 +649,76 @@ class AiConversation implements AiConversationInterface
     }
 
     /**
+     * Loads the stored tool result attachments, preserving their call IDs.
+     *
+     * @param array<string,mixed> $row
+     * @param array<string,mixed> $data
+     * @return array<string,FileInfoInterface[]>
+     */
+    private function loadToolResultAttachments(array $row, array $data) : array
+    {
+        $refsByCall = $this->getSerializer()->getToolResultAttachmentReferences($data);
+        if ($refsByCall === []) {
+            return [];
+        }
+        $contents = $this->loadAttachmentContents($row['UID']);
+        $attachments = [];
+        foreach ($refsByCall as $callId => $refs) {
+            $attachments[$callId] = $this->restoreAttachments($refs, $contents);
+        }
+        return $attachments;
+    }
+
+    /**
+     * Reads the stored files of one message in a single query.
+     *
+     * @param string $messageUid
+     * @return array<string,string> File contents by relative path
+     */
+    private function loadAttachmentContents(string $messageUid) : array
+    {
+        $contents = [];
+        try {
+            $sheet = DataSheetFactory::createFromObjectIdOrAlias($this->workbench, 'axenox.GenAI.AI_MESSAGE_FILE');
+            $sheet->getColumns()->addMultiple(['PATHNAME_RELATIVE', 'CONTENTS']);
+            $sheet->getFilters()->addConditionFromString('AI_MESSAGE', $messageUid, ComparatorDataType::EQUALS);
+            $sheet->dataRead();
+            foreach ($sheet->getRows() as $file) {
+                $contents[$file['PATHNAME_RELATIVE']] = (string) $file['CONTENTS'];
+            }
+        } catch (\Throwable $error) {
+            $this->logException($error);
+        }
+        return $contents;
+    }
+
+    /**
+     * Resolves references against loaded files, keeping placeholders for missing or changed files.
+     *
+     * @param array<int,array<string,mixed>> $refs
+     * @param array<string,string> $contents
+     * @return FileInfoInterface[]
+     */
+    private function restoreAttachments(array $refs, array $contents) : array
+    {
+        $attachments = [];
+        foreach ($refs as $ref) {
+            $mimeType = $ref['mime_type'] ?? MimeTypeDataType::guessMimeTypeOfExtension(pathinfo($ref['filename'], PATHINFO_EXTENSION));
+            switch (true) {
+                case ! array_key_exists($ref['path'], $contents):
+                    $attachments[] = new UnavailableAttachment($ref['filename'], $mimeType, 'file is missing or inaccessible');
+                    break;
+                case $ref['sha256'] !== null && ! hash_equals((string) $ref['sha256'], hash('sha256', $contents[$ref['path']])):
+                    $attachments[] = new UnavailableAttachment($ref['filename'], $mimeType, 'file content has changed');
+                    break;
+                default:
+                    $attachments[] = new InMemoryFile($contents[$ref['path']], $ref['filename'], $mimeType);
+            }
+        }
+        return $attachments;
+    }
+
+    /**
      * Extracts generic usage facts of an LLM exchange
      * 
      * @param AiQueryInterface $query
@@ -663,9 +817,13 @@ class AiConversation implements AiConversationInterface
             }
         }
 
-        // Keep the completed message in memory first, so a storage problem does not change the model context
-        $completed = $message->withToolResults($results);
-        $this->liveMessages[$messageId] = $completed;
+        $previousToolResultRefs = $this->getSerializer()->getToolResultAttachmentReferences($this->messageData[$messageId] ?? []);
+        $previousAttachmentPaths = [];
+        foreach ($previousToolResultRefs as $fileRefs) {
+            foreach ($fileRefs as $ref) {
+                $previousAttachmentPaths[] = $ref['path'];
+            }
+        }
 
         $diagnostics = [];
         foreach ($results as $callId => $result) {
@@ -703,37 +861,65 @@ class AiConversation implements AiConversationInterface
             }
         }
 
+        [$toolResultAttachmentReferences, $storedAttachmentPaths] = $this->persistToolResultAttachments($messageId, $results);
+        $completed = $message->withToolResults($results);
+        $this->liveMessages[$messageId] = $completed;
+
         $finishedOn = $data['finished_on'] ?? date('Y-m-d H:i:s');
         $timing = $data['call_timing'] ?? [];
         unset($data['call_timing']);
-        $stored = array_replace($this->messageData[$messageId] ?? [], $data, $this->getSerializer()->toData($completed));
+        $stored = array_replace(
+            $this->messageData[$messageId] ?? [],
+            $data,
+            $this->getSerializer()->toData($completed, $toolResultAttachmentReferences)
+        );
         foreach ($stored['calls'] as $index => $entry) {
             $stored['calls'][$index] = array_replace($entry, (array) ($timing[$entry['call_id']] ?? []));
         }
         $stored['diagnostics'] = $diagnostics;
         $stored['finished_on'] = $finishedOn;
-        $this->messageData[$messageId] = $stored;
-
-        $sheet = DataSheetFactory::createFromObjectIdOrAlias($this->workbench, 'axenox.GenAI.AI_MESSAGE');
-        $sheet->getFilters()->addConditionFromString('AI_CONVERSATION', $this->conversationId, ComparatorDataType::EQUALS);
-        $sheet->getFilters()->addConditionFromString('UID', $messageId, ComparatorDataType::EQUALS);
-        $sheet->getColumns()->addFromSystemAttributes();
-        $sheet->addRow(($this->messageSystemRows[$messageId] ?? []) + [
-            'DATA' => $this->getSerializer()->encode($stored), 
-            'MESSAGE' => $completed->toMarkdown(), 
-            'FINISHED_ON' => $finishedOn
-        ]);
-        $transaction = $this->workbench->data()->startTransaction();
         try {
+            $encodedData = $this->getSerializer()->encode($stored);
+        } catch (\Throwable $error) {
+            $this->deleteStoredAttachmentPaths($storedAttachmentPaths);
+            throw $error;
+        }
+        $transaction = null;
+        $messagePersisted = false;
+        try {
+            $sheet = DataSheetFactory::createFromObjectIdOrAlias($this->workbench, 'axenox.GenAI.AI_MESSAGE');
+            $sheet->getFilters()->addConditionFromString('AI_CONVERSATION', $this->conversationId, ComparatorDataType::EQUALS);
+            $sheet->getFilters()->addConditionFromString('UID', $messageId, ComparatorDataType::EQUALS);
+            $sheet->getColumns()->addFromSystemAttributes();
+            $sheet->addRow(($this->messageSystemRows[$messageId] ?? []) + [
+                'DATA' => $encodedData,
+                'MESSAGE' => $completed->toMarkdown(),
+                'FINISHED_ON' => $finishedOn
+            ]);
+            $transaction = $this->workbench->data()->startTransaction();
             if ($sheet->dataUpdate(false, $transaction) !== 1) {
                 throw new RuntimeException('Tool message completion did not update its existing record.');
             }
             $transaction->commit();
-            $this->messageSystemRows[$messageId] = $sheet->extractSystemColumns()->getRow(0);
+            $messagePersisted = true;
         } catch (\Throwable $error) {
-            $transaction->rollback();
+            if (! $messagePersisted) {
+                if ($transaction !== null) {
+                    $transaction->rollback();
+                }
+                $this->deleteStoredAttachmentPaths($storedAttachmentPaths);
+            }
             throw $error;
         }
+        $this->messageSystemRows[$messageId] = $sheet->extractSystemColumns()->getRow(0);
+        $this->messageData[$messageId] = $stored;
+        $currentAttachmentPaths = [];
+        foreach ($toolResultAttachmentReferences as $fileRefs) {
+            foreach ($fileRefs as $ref) {
+                $currentAttachmentPaths[] = $ref['path'];
+            }
+        }
+        $this->deleteStoredAttachmentPaths(array_values(array_diff($previousAttachmentPaths, $currentAttachmentPaths)));
     }
 
     /**

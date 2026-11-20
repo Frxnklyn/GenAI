@@ -248,7 +248,7 @@ class CompletionsApiRequestAdapter implements HttpRequestAdapterInterface, HttpR
                 $output[] = [
                     'role' => 'tool', 
                     'tool_call_id' => $this->mapCallId($message, $call->getCallId(), $idState),
-                    'content' => $this->buildToolResultText($results[$call->getCallId()], $appendixSeen)
+                    'content' => $this->buildToolResultTextWithAttachmentNotes($query, $results[$call->getCallId()], $appendixSeen)
                 ];
             }
         }

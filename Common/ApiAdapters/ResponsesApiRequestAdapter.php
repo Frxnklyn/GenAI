@@ -6,10 +6,12 @@ use axenox\GenAI\Interfaces\AiConnectorInterface;
 use axenox\GenAI\Interfaces\AiQueryInterface;
 use axenox\GenAI\Interfaces\AiToolCallMessageInterface;
 use axenox\GenAI\Interfaces\AiToolInterface;
+use axenox\GenAI\Interfaces\AiToolResultInterface;
 use axenox\GenAI\Interfaces\HttpRequestAdapterInterface;
 use axenox\GenAI\Interfaces\HttpRequestToolTestInterface;
 use exface\Core\DataTypes\JsonDataType;
 use exface\Core\Interfaces\Actions\ServiceParameterInterface;
+use exface\Core\Interfaces\Filesystem\FileInfoInterface;
 use GuzzleHttp\Psr7\Response;
 use Psr\Http\Message\ResponseInterface;
 
@@ -303,7 +305,7 @@ class ResponsesApiRequestAdapter implements HttpRequestAdapterInterface, HttpReq
                 $output[] = [
                     'type' => 'function_call_output', 
                     'call_id' => $this->mapCallId($message, $call->getCallId(), $idState),
-                    'output' => $this->buildToolResultText($results[$call->getCallId()], $appendixSeen)
+                    'output' => $this->buildToolResultOutput($query, $results[$call->getCallId()], $appendixSeen)
                 ];
             }
         }
@@ -337,18 +339,61 @@ class ResponsesApiRequestAdapter implements HttpRequestAdapterInterface, HttpReq
         $text = $message->getText();
         $files = [];
         foreach ($message->getAttachments() as $file) {
-            $contents = $this->readAttachment($query, $file, array_merge(self::SUPPORTED_IMAGE_TYPES, self::SUPPORTED_FILE_TYPES));
-            if ($contents === null) {
+            $content = $this->buildAttachmentContent($query, $file);
+            if ($content === null) {
                 $text = $this->appendNote($text, $this->buildAttachmentNote($file));
                 continue;
             }
-            $mimeType = $this->getAttachmentMimeType($file);
-            $url = 'data:' . $mimeType . ';base64,' . base64_encode($contents);
-            $files[] = $this->isMimeTypeSupported($mimeType, self::SUPPORTED_IMAGE_TYPES)
-                ? ['type' => 'input_image', 'image_url' => $url]
-                : ['type' => 'input_file', 'filename' => $file->getFilename(), 'file_data' => $url];
+            $files[] = $content;
         }
         return array_merge([['type' => 'input_text', 'text' => $text]], $files);
+    }
+
+    /**
+     * Builds the Responses API output for one tool result, including its files when present.
+     *
+     * @param AiQueryInterface $query
+     * @param AiToolResultInterface $result
+     * @param array<string,bool> $appendixSeen
+     * @return string|array<int,array<string,mixed>>
+     */
+    private function buildToolResultOutput(AiQueryInterface $query, AiToolResultInterface $result, array &$appendixSeen) : string|array
+    {
+        $text = $this->buildToolResultText($result, $appendixSeen);
+        $attachments = $result->getAttachments();
+        if ($attachments === []) {
+            return $text;
+        }
+        $content = [['type' => 'input_text', 'text' => $text]];
+        foreach ($attachments as $file) {
+            $attachment = $this->buildAttachmentContent($query, $file);
+            if ($attachment === null) {
+                $content[] = ['type' => 'input_text', 'text' => $this->buildAttachmentNote($file)];
+                continue;
+            }
+            $content[] = $attachment;
+        }
+        return $content;
+    }
+
+    /**
+     * Converts a readable attachment into an OpenAI Responses API content part.
+     *
+     * @param AiQueryInterface $query
+     * @param FileInfoInterface $file
+     * @return array<string,string>|null
+     */
+    private function buildAttachmentContent(AiQueryInterface $query, FileInfoInterface $file) : ?array
+    {
+        $contents = $this->readAttachment($query, $file, array_merge(self::SUPPORTED_IMAGE_TYPES, self::SUPPORTED_FILE_TYPES));
+        if ($contents === null) {
+            return null;
+        }
+        $mimeType = $this->getAttachmentMimeType($file);
+        $dataUrl = 'data:' . $mimeType . ';base64,' . base64_encode($contents);
+        return $this->isMimeTypeSupported($mimeType, self::SUPPORTED_IMAGE_TYPES)
+            ? ['type' => 'input_image', 'image_url' => $dataUrl]
+            : ['type' => 'input_file', 'filename' => $file->getFilename(), 'file_data' => $dataUrl];
     }
 
     /**

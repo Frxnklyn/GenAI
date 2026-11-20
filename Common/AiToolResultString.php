@@ -9,14 +9,16 @@ use exface\Core\DataTypes\HtmlDataType;
 use exface\Core\DataTypes\LogLevelDataType;
 use exface\Core\DataTypes\MarkdownDataType;
 use exface\Core\Exceptions\InternalError;
+use exface\Core\Exceptions\InvalidArgumentException;
 use exface\Core\Factories\DataTypeFactory;
 use exface\Core\Interfaces\DataTypes\DataTypeInterface;
 use exface\Core\Interfaces\Exceptions\ExceptionInterface;
+use exface\Core\Interfaces\Filesystem\FileInfoInterface;
 use exface\Core\Interfaces\Log\LoggerInterface;
 use exface\Core\Interfaces\WorkbenchInterface;
 
 /**
- * Retain a textual tool result with ordered diagnostics and optional supplementary instructions.
+ * Retain a textual tool result, its generated files, ordered diagnostics and optional supplementary instructions.
  * 
  * Results can be restored without the original tool. For example:
  *
@@ -46,6 +48,7 @@ class AiToolResultString implements AiToolResultInterface
     private array $operationalErrors = [];
     private bool $failed = false;
     private ?float $durationMs = null;
+    private array $attachments = [];
 
     /**
      * Creates a detached result; exceptions are classified only during fresh execution.
@@ -55,14 +58,21 @@ class AiToolResultString implements AiToolResultInterface
      * @param DataTypeInterface|null $type
      * @param string[] $appendix
      * @param \Throwable[] $exceptions
+     * @param FileInfoInterface[] $attachments
      * @return void
      */
-    public function __construct(WorkbenchInterface $workbench, mixed $value = '', ?DataTypeInterface $type = null, array $appendix = [], array $exceptions = [])
+    public function __construct(WorkbenchInterface $workbench, mixed $value = '', ?DataTypeInterface $type = null, array $appendix = [], array $exceptions = [], array $attachments = [])
     {
         $this->workbench = $workbench;
         $this->setValue($value);
         $this->type = $type;
         $this->appendix = $appendix;
+        foreach ($attachments as $attachment) {
+            if (! $attachment instanceof FileInfoInterface) {
+                throw new InvalidArgumentException('Tool result attachments must be instances of FileInfoInterface.');
+            }
+        }
+        $this->attachments = array_values($attachments);
         foreach ($exceptions as $exception) {
             $this->addException($exception);
         }
@@ -75,6 +85,15 @@ class AiToolResultString implements AiToolResultInterface
     public function getValue() : string
     {
         return $this->value;
+    }
+
+    /**
+     * {@inheritDoc}
+     * @see AiToolResultInterface::getAttachments()
+     */
+    public function getAttachments() : array
+    {
+        return $this->attachments;
     }
 
     /**

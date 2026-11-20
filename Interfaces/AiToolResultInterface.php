@@ -2,6 +2,7 @@
 namespace axenox\GenAI\Interfaces;
 use exface\Core\Interfaces\DataTypes\DataTypeInterface;
 use exface\Core\Interfaces\Exceptions\ExceptionInterface;
+use exface\Core\Interfaces\Filesystem\FileInfoInterface;
 use exface\Core\Interfaces\WorkbenchDependantInterface;
 use exface\Core\Interfaces\iCanBeConvertedToUxon;
 
@@ -20,6 +21,13 @@ interface AiToolResultInterface extends WorkbenchDependantInterface, iCanBeConve
      * @return mixed
      */
     public function getValue() : mixed;
+
+    /**
+     * Returns the files associated with this tool call.
+     *
+     * @return FileInfoInterface[]
+     */
+    public function getAttachments() : array;
 
     /**
      * Returns durable error messages in occurrence order.

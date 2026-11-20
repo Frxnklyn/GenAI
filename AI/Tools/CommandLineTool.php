@@ -138,6 +138,40 @@ class CommandLineTool extends AbstractAiTool
     }
 
     /**
+     * {@inheritDoc}
+     * @see AbstractAiTool::getRules()
+     */
+    public function getRules() : ?string
+    {
+        $rules = [];
+        $allowedCommands = $this->getAllowedCommands();
+        if ($allowedCommands !== []) {
+            $rules[] = 'Only run commands matching one of these allowed command patterns:';
+            foreach ($allowedCommands as $pattern) {
+                $rules[] = '- `' . $pattern . '`';
+            }
+        } else {
+            $rules[] = 'No allowed command patterns are configured; any command not blocked below is permitted.';
+        }
+
+        $blockedCommands = $this->getBlockedCommands();
+        if ($blockedCommands !== []) {
+            $rules[] = 'Never run commands matching any of these blocked command patterns, even if also allowed:';
+            foreach ($blockedCommands as $pattern) {
+                $rules[] = '- `' . $pattern . '`';
+            }
+        } else {
+            $rules[] = 'No blocked command patterns are configured.';
+        }
+
+        $rules[] = 'Plain-string patterns match the complete command or its executable name; regular expressions match the complete command line.';
+        $rules[] = 'Do not try to bypass the configured command restrictions.';
+        $rules[] = 'If a command needed for the task is not permitted and tools for suggesting improvements (such as note tools) are available, use them to explain which CLI command is needed and for what purpose. Suggesting a command does not grant permission to run it.';
+
+        return implode("\n", $rules);
+    }
+
+    /**
      * Timeout in seconds for CLI command execution.
      * 
      * @uxon-property command_timeout

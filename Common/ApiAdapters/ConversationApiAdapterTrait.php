@@ -182,6 +182,24 @@ trait ConversationApiAdapterTrait
     }
 
     /**
+     * Renders a text-only tool result and explicitly notes files unsupported by that provider.
+     *
+     * @param AiQueryInterface $query
+     * @param AiToolResultInterface $result
+     * @param array<string,bool> $appendixSeen
+     * @return string
+     */
+    protected function buildToolResultTextWithAttachmentNotes(AiQueryInterface $query, AiToolResultInterface $result, array &$appendixSeen) : string
+    {
+        $text = $this->buildToolResultText($result, $appendixSeen);
+        foreach ($result->getAttachments() as $file) {
+            $query->addWarning('Tool result attachment "' . $file->getFilename() . '" cannot be sent to this API - replaced by a note.');
+            $text = $this->appendNote($text, $this->buildAttachmentNote($file));
+        }
+        return $text;
+    }
+
+    /**
      * Returns the MIME type of an attachment or `application/octet-stream` if unknown
      * 
      * @param FileInfoInterface $file

@@ -28,6 +28,11 @@ or call arguments. Exported result UXON contains `class`, data-type `type`, `val
 `appendix`, `errors` and `warnings`. Only supported result classes are reconstructed. Stored
 diagnostics do not require exceptions or the original tool configuration.
 
+`AiToolResultInterface::getAttachments()` returns the files of an individual tool call, or
+an empty array if there are none. Supply files when constructing `AiToolResultString`; custom
+result implementations must provide `getAttachments()`. During the current conversation,
+the original file objects are used. Reopened conversations use the stored file snapshots.
+
 ## Choosing a tool
 
 | Requirement | Recommended tool |
