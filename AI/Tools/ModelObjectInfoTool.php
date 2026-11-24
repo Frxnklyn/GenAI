@@ -12,6 +12,7 @@ use axenox\GenAI\Interfaces\AiToolResultInterface;
 use exface\Core\CommonLogic\Actions\ServiceParameter;
 use exface\Core\DataTypes\ComparatorDataType;
 use exface\Core\DataTypes\MarkdownDataType;
+use exface\Core\DataTypes\MetamodelAliasDataType;
 use exface\Core\Facades\DocsFacade\MarkdownPrinters\ObjectMarkdownPrinter;
 use exface\Core\Factories\DataSheetFactory;
 use exface\Core\Factories\DataTypeFactory;
@@ -70,7 +71,9 @@ class ModelObjectInfoTool extends AbstractAiTool
                 default:
                     $orGroup = $ds->getFilters()->addNestedOR();
                     $orGroup->addConditionFromString('NAME', $searchTerm, ComparatorDataType::IS);
-                    $orGroup->addConditionFromString('ALIAS', $searchTerm, ComparatorDataType::IS);
+                    if (preg_match(MetamodelAliasDataType::VALIDATION_REGEX, $searchTerm) === 1) {
+                        $orGroup->addConditionFromString('ALIAS', $searchTerm, ComparatorDataType::IS);
+                    }
             }
 
             $ds->dataRead();
