@@ -11,7 +11,7 @@
     "created_by_user_selector": "0x31000000000000000000000000000000",
     "created_on": "2026-09-04 00:00:00",
     "modified_by_user_selector": "0x31000000000000000000000000000000",
-    "modified_on": "2026-09-15 10:33:39",
+    "modified_on": "2026-11-25 12:48:58",
     "contents": {
         "widget_type": "SplitHorizontal",
         "object_alias": "axenox.GenAI.AI_TOOL_CALL",
@@ -56,7 +56,12 @@
                                 "attribute_alias": "FINISHED_ON"
                             },
                             {
-                                "attribute_alias": "AI_MESSAGE"
+                                "attribute_alias": "AI_MESSAGE",
+                                "hidden": true
+                            },
+                            {
+                                "calculation": "=Left(AI_MESSAGE__MESSAGE, 80)",
+                                "caption": "Message"
                             },
                             {
                                 "calculation": "=Left(RESULT, 240)",

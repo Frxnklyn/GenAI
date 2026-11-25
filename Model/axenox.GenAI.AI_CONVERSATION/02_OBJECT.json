@@ -87,7 +87,7 @@
         {
             "_EXPORT_SUMMARY": "AI conversation [axenox.GenAI.AI_CONVERSATION]",
             "CREATED_ON": "2024-09-17 13:08:34",
-            "MODIFIED_ON": "2026-11-19 16:50:18",
+            "MODIFIED_ON": "2026-11-25 12:57:08",
             "CREATED_BY_USER": "0x31000000000000000000000000000000",
             "MODIFIED_BY_USER": "0x31000000000000000000000000000000",
             "UID": "0x11ef91a72e443c7491a7025041000001",
@@ -253,6 +253,9 @@
                                                 "attribute_alias": "STARTED_ON"
                                             },
                                             {
+                                                "attribute_alias": "TOOL_NAME"
+                                            },
+                                            {
                                                 "attribute_alias": "STATE"
                                             },
                                             {
@@ -262,13 +265,7 @@
                                                 "attribute_alias": "EXECUTION_TIME_MS"
                                             },
                                             {
-                                                "attribute_alias": "AI_MESSAGE"
-                                            },
-                                            {
-                                                "attribute_alias": "TOOL_ALIAS"
-                                            },
-                                            {
-                                                "attribute_alias": "CALL_DISPLAY"
+                                                "attribute_alias": "ARGUMENTS"
                                             }
                                         ],
                                         "sorters": [
