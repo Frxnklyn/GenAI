@@ -68,6 +68,51 @@
                         ],
                         "buttons": [
                             {
+                                "id": "open_ticket_demo_docs",
+                                "caption": "Demo-Beispiele",
+                                "icon": "book",
+                                "action": {
+                                    "alias": "exface.Core.GoToUrl",
+                                    "input_rows_min": 0,
+                                    "url": "api/docs/axenox/genai/Docs/AI/Workflows/ticket-review-example.md"
+                                }
+                            },
+                            {
+                                "widget_type": "MenuButton",
+                                "id": "run_ticket_demo",
+                                "caption": "Demo starten",
+                                "icon": "play",
+                                "buttons": [
+                                    {
+                                        "id": "demo_detailed_ticket",
+                                        "caption": "Beschreibung vorhanden",
+                                        "action": {
+                                            "alias": "axenox.GenAI.RunDemoTicketWorkflow",
+                                            "input_rows_min": 0,
+                                            "scenario": "draft"
+                                        }
+                                    },
+                                    {
+                                        "id": "demo_vague_ticket",
+                                        "caption": "Beschreibung aus Zusatzangaben ergänzen",
+                                        "action": {
+                                            "alias": "axenox.GenAI.RunDemoTicketWorkflow",
+                                            "input_rows_min": 0,
+                                            "scenario": "clarify"
+                                        }
+                                    },
+                                    {
+                                        "id": "demo_incomplete_ticket",
+                                        "caption": "Keine Zusatzangaben vorhanden",
+                                        "action": {
+                                            "alias": "axenox.GenAI.RunDemoTicketWorkflow",
+                                            "input_rows_min": 0,
+                                            "scenario": "incomplete"
+                                        }
+                                    }
+                                ]
+                            },
+                            {
                                 "action_alias": "exface.Core.ShowObjectCreateDialog"
                             },
                             {
